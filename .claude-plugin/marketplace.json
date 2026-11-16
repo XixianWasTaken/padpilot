@@ -1,0 +1,14 @@
+{
+  "name": "dualsense-agent",
+  "description": "PS5 DualSense controller bridge for Claude Code",
+  "owner": {
+    "name": "XixianWasTaken"
+  },
+  "plugins": [
+    {
+      "name": "dualsense",
+      "source": "./",
+      "description": "Lightbar, rumble, trigger and speaker feedback plus controller input for Claude Code, Codex and the Claude desktop app"
+    }
+  ]
+}

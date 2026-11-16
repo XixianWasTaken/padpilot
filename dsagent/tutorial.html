@@ -1,0 +1,1120 @@
+<title>DualSense Pad School</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one centred column, like a 2003 fan homepage built around a game tutorial. Top to bottom:
+   glitter header + marquee, the agent's screen as a Win98 window, the coach's speech box, then the
+   controller in a rainbow glitter frame with only the key to press lit up; 88x31 badges at the end.
+   One committed dark look (night-sky GeoCities), so no light theme. */
+:root {
+  --void: #14002e;      /* page sky */
+  --panel: #2b0b52;     /* boxes */
+  --panel-hi: #4a1a85;  /* bevel light edge */
+  --panel-lo: #090016;  /* bevel dark edge */
+  --fg: #fff3ff;
+  --muted: #cfaef0;
+  --hot: #ff3fd8;       /* hot pink, the one loud accent */
+  --cyan: #3ff4ff;
+  --gold: #ffe34d;      /* "press this" */
+  --good: #a8ff3f;
+  --bad: #ff4d6d;
+  --win-a: #000080;     /* Win98 title bar */
+  --win-b: #1084d0;
+  --term: #05000d;
+  --shell: #f1eef8;
+  --shell-edge: #b8b0d4;
+  --key: #2a1d4f;
+  --key-fg: #fff3ff;
+  --tri: #0fae7c; --cir: #f0325a; --crs: #2f62ff; --sqr: #d42fc9;
+  --lc: rgb(90, 90, 110);
+  --pixel: "Press Start 2P", "ZCOOL KuaiLe", monospace;
+  --cute: "ZCOOL KuaiLe", "Noto Sans SC", system-ui, sans-serif;
+  --vt: "VT323", "TermCJK", ui-monospace, Menlo, monospace;
+  --body: "Noto Sans SC", system-ui, sans-serif;
+  --head: var(--cute);
+  --say: var(--cute);
+  color-scheme: dark;
+}
+html[lang="en"] { --head: var(--pixel); --say: var(--vt); }
+/* Chinese inside the VT323 terminal: a system CJK face shrunk to sit on VT323's small x-height. */
+@font-face { font-family: "TermCJK"; src: local("PingFang SC"), local("Hiragino Sans GB"), local("Microsoft YaHei"), local("Noto Sans CJK SC"), local("Noto Sans SC"); size-adjust: 84%; unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF; }
+@property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background-color: var(--void); color: var(--fg); }
+body {
+  font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 32px;
+  /* tiled pixel night sky: two star layers that twinkle out of step */
+  background-image:
+    radial-gradient(1.5px 1.5px at 12px 18px, #fff 99%, transparent),
+    radial-gradient(1px 1px at 58px 72px, var(--cyan) 99%, transparent),
+    radial-gradient(1.5px 1.5px at 96px 40px, var(--hot) 99%, transparent),
+    radial-gradient(1px 1px at 33px 101px, #fff 99%, transparent),
+    radial-gradient(1px 1px at 110px 112px, var(--gold) 99%, transparent),
+    linear-gradient(180deg, #1d0042 0%, var(--void) 40%, #0a0019 100%);
+  background-size: 128px 128px, 128px 128px, 128px 128px, 128px 128px, 128px 128px, 100% 100%;
+  background-attachment: fixed;
+  min-height: 100%;
+}
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(1.5px 1.5px at 80px 24px, #fff 99%, transparent), radial-gradient(1px 1px at 20px 70px, var(--hot) 99%, transparent), radial-gradient(1.5px 1.5px at 70px 100px, var(--cyan) 99%, transparent);
+  background-size: 128px 128px; animation: twinkle 2.4s steps(2) infinite; }
+@keyframes twinkle { 50% { opacity: .15; } }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px dashed var(--gold); outline-offset: 3px; }
+.wrap { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; display: grid; gap: 14px; }
+.pixbox, .bubble { box-shadow: 0 -3px 0 0 var(--bc, var(--hot)), 0 3px 0 0 var(--bc, var(--hot)), -3px 0 0 0 var(--bc, var(--hot)), 3px 0 0 0 var(--bc, var(--hot)); }
+
+/* ---------- header: glitter brand, pixel progress, language */
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.brand { position: relative; font-family: var(--head); font-size: 26px; line-height: 1.1; white-space: nowrap; letter-spacing: .02em;
+  background: radial-gradient(circle at 20% 30%, #fff 0 1.2px, transparent 2px) 0 0 / 9px 9px,
+              radial-gradient(circle at 70% 60%, #fff 0 1px, transparent 1.8px) 0 0 / 13px 11px,
+              linear-gradient(90deg, var(--hot), var(--gold), var(--cyan), var(--hot)) 0 0 / 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(2px 2px 0 var(--panel-lo)) drop-shadow(0 0 6px color-mix(in srgb, var(--hot) 70%, transparent));
+  animation: glitter 1.2s steps(4) infinite, rainbow 6s linear infinite; }
+html[lang="en"] .brand { font-size: 15px; }
+@keyframes glitter { 50% { background-position: 4px 3px, 7px 5px, 0 0; } }
+@keyframes rainbow { to { background-position: 0 0, 0 0, 300% 0; } }
+.brand-wrap { position: relative; padding: 4px 10px 4px 2px; }
+.spark { position: absolute; width: 12px; height: 12px; background: var(--gold); pointer-events: none;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: tw 1.4s ease-in-out infinite; }
+.spark.s2 { background: var(--cyan); width: 8px; height: 8px; animation-delay: .5s; }
+.spark.s3 { background: #fff; width: 10px; height: 10px; animation-delay: .9s; }
+@keyframes tw { 0%, 100% { transform: scale(.2) rotate(0); opacity: .3; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+.progress { flex: 1 1 200px; display: flex; gap: 3px; min-width: 0; padding: 3px; background: var(--panel-lo); border: 2px solid var(--panel-hi); }
+.progress i { flex: 1; height: 10px; background: #2a1450; }
+.progress i.done { background: repeating-linear-gradient(90deg, var(--good) 0 4px, #6fd122 4px 6px); }
+.progress i.now { background: var(--gold); animation: blinkk 0.8s steps(1) infinite; }
+@keyframes blinkk { 50% { background: transparent; } }
+.lang { display: flex; flex: none; gap: 6px; }
+.lang button { font-family: "Press Start 2P", var(--cute), monospace; font-size: 9px; padding: 6px 8px; cursor: pointer; color: var(--muted);
+  background: var(--panel); border: 2px solid; border-color: var(--panel-hi) var(--panel-lo) var(--panel-lo) var(--panel-hi); }
+.lang button[aria-pressed="true"] { color: var(--void); background: var(--gold); border-color: #fff8b8 #a88a00 #a88a00 #fff8b8; }
+
+.marquee { overflow: hidden; white-space: nowrap; background: var(--hot); color: var(--void); border-block: 2px solid var(--gold);
+  font-family: var(--vt); font-size: 19px; line-height: 1.35; padding-block: 1px; }
+.marquee span { display: inline-block; padding-left: 100%; animation: mq 22s linear infinite; }
+@keyframes mq { to { transform: translateX(-100%); } }
+
+/* ---------- the agent's screen as a Win98 window */
+.term { background: #c0c0c0; padding: 3px; border: 2px solid; border-color: #fff #404040 #404040 #fff; box-shadow: 4px 4px 0 var(--panel-lo); }
+.term .bar { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 7px; color: #fff; font-family: var(--vt); font-size: 18px; line-height: 1;
+  background: linear-gradient(90deg, var(--win-a), var(--win-b)); }
+.term .bar b { font-weight: 400; }
+.term .bar .lvl { margin-left: auto; font-family: var(--body); font-size: 12px; }
+.term .bar .wb { display: inline-grid; place-items: center; width: 18px; height: 16px; background: #c0c0c0; color: #000; font-family: var(--vt); font-size: 15px;
+  border: 2px solid; border-color: #fff #404040 #404040 #fff; }
+.term .bar .lvl + .wb { margin-left: 6px; }
+.term .body { margin-top: 3px; background: var(--term); border: 2px solid; border-color: #404040 #fff #fff #404040;
+  padding: 8px 12px 10px; height: 204px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
+  font-family: var(--vt); font-size: 19px; line-height: 1.2; color: #d8ffd8; }
+.term .log { margin-top: auto; }
+.ln { white-space: pre-wrap; word-break: break-word; }
+.c-dim { color: #8b7fb0; } .c-ok { color: var(--good); } .c-warn { color: #ffb347; } .c-err { color: var(--bad); }
+.c-you { color: var(--cyan); } .c-acc { color: #ff9cf0; }
+.box { border: 2px dashed #ffb347; padding: 4px 9px; margin: 6px 0; }
+.box.card { border-color: var(--hot); }
+.input { border: 2px solid #4b3d73; padding: 3px 9px; margin-top: 8px; color: var(--cyan); }
+.cur { display: inline-block; width: 9px; height: 15px; background: var(--cyan); vertical-align: -2px; animation: cur 1s steps(1) infinite; }
+@keyframes cur { 50% { opacity: 0; } }
+.new { animation: pop .3s steps(3); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+.wheel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 6px; font-family: var(--body); font-size: 11.5px; line-height: 1.35; }
+.wheel div { border: 2px dotted #4b3d73; padding: 4px; text-align: center; min-height: 38px; display: grid; place-items: center; }
+.wheel .hub { border-style: solid; color: var(--tri); font-family: var(--vt); font-size: 20px; }
+.wheel .sel { border: 2px solid var(--gold); background: color-mix(in srgb, var(--gold) 22%, transparent); color: #fff; }
+
+/* ---------- the coach */
+.coach { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; align-items: start; }
+.avatar { width: 52px; height: 52px; display: grid; place-items: center; background: var(--panel); font-family: "Press Start 2P", monospace; font-size: 12px; color: var(--fg);
+  border: 4px solid var(--lc); box-shadow: 0 0 12px var(--lc), 3px 3px 0 var(--panel-lo); image-rendering: pixelated; transition: border-color .3s, box-shadow .3s; }
+.bubble { --bc: var(--hot); position: relative; background: var(--panel); padding: 12px 15px; min-height: 76px; margin: 3px; }
+.bubble::before { content: ""; position: absolute; left: -12px; top: 18px; width: 9px; height: 12px; background: var(--bc);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+.bubble.ok { --bc: var(--good); }
+.bubble.no { animation: shake .3s steps(4); }
+@keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.say { font-family: var(--say); font-size: 18px; line-height: 1.55; margin: 0; letter-spacing: .01em; }
+html[lang="en"] .say { font-size: 22px; line-height: 1.2; }
+.say b { color: var(--gold); font-weight: 400; text-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent); }
+.sub { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; }
+.sub.bad { color: var(--bad); }
+.cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--muted); font-size: 13px; }
+.sym { font-family: var(--vt); font-size: 17px; line-height: 1; padding: 1px 6px; color: var(--key-fg); background: var(--key); white-space: nowrap;
+  border: 2px solid; border-color: #6a5aa0 #0c0420 #0c0420 #6a5aa0; }
+.timer { height: 10px; background: var(--panel-lo); border: 2px solid var(--panel-hi); margin-top: 8px; }
+.timer i { display: block; height: 100%; width: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 6px, #c9a800 6px 8px); }
+.note { font-size: 12.5px; color: var(--muted); border-left: 4px solid var(--hot); padding-left: 10px; margin-top: 6px; }
+.note code { font-family: var(--vt); font-size: 16px; background: var(--key); padding: 0 5px; color: var(--cyan); }
+
+/* ---------- the controller in a rainbow glitter frame */
+.padbox { position: relative; padding: 8px 6px 2px; overflow: hidden;
+  border: 5px solid transparent;
+  background: radial-gradient(ellipse at 50% 35%, #2c1060 0%, #170638 70%) padding-box,
+              conic-gradient(from var(--ang), var(--hot), var(--gold), var(--good), var(--cyan), #8a5cff, var(--hot)) border-box;
+  animation: spin 4s linear infinite; }
+@keyframes spin { to { --ang: 360deg; } }
+.padbox .spark { z-index: 1; }
+.glow { position: absolute; left: 50%; top: 14%; width: 56%; height: 38%; transform: translateX(-50%); background: var(--lc); filter: blur(60px); opacity: .45; border-radius: 50%; pointer-events: none; }
+svg.ctl { width: 100%; height: auto; display: block; position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.shell { fill: url(#g-shell); stroke: #0b0620; stroke-width: 4; stroke-linejoin: round; }
+.hit { cursor: pointer; transition: opacity .25s; }
+.hit .k { fill: url(#g-key); stroke: #0b0620; stroke-width: 2; transition: fill .08s; }
+.hit .k.stk, .hit .k.dk { fill: url(#g-stick); }
+.hit.sh .k { fill: url(#g-sh); stroke: #0b0620; stroke-width: 3; stroke-linejoin: round; }
+.lbl.on-sh { fill: #3a2a70; font-size: 18px; }
+.hit .k.pad { fill: url(#g-pad); stroke: #b8b0d4; }
+.hit.down .k, .hit.sh.down .k { fill: #b9a5ff; }
+.hit.latched .k, .hit.sh.latched .k { fill: #ff9be8; }
+.hit.latched .ring { stroke: var(--hot); stroke-width: 3; }
+.ring { fill: none; stroke: transparent; }
+svg.spotlight .hit:not(.target):not(.latched) { opacity: .62; filter: saturate(.45); }
+svg.spotlight .hit[data-btn="touchpad"]:not(.target) { opacity: .9; }
+.hit.target .ring { stroke: var(--gold); stroke-width: 4; stroke-dasharray: 6 4; animation: pulse .9s steps(3) infinite; }
+.hit.target .k { filter: drop-shadow(0 0 7px var(--gold)); }
+@keyframes pulse { 50% { stroke-width: 7; stroke: var(--hot); } }
+.hit.hit-ok .k, .hit.sh.hit-ok .k { fill: var(--good); }
+.lbl { font-family: "VT323", monospace; font-size: 15px; fill: #ffffff; pointer-events: none; }
+.lbl.on-key { fill: #3a2a70; }
+.stick .lbl.on-key, [data-btn="ps"] .lbl.on-key { fill: #fff3ff; }
+.lbl.on-pad { fill: #9a90bd; font-size: 17px; }
+.lb { fill: var(--lc); }
+.sticker { animation: tw2 1.6s steps(3) infinite; transform-box: fill-box; transform-origin: center; }
+.sticker.s2 { animation-delay: .5s; } .sticker.s3 { animation-duration: 2.2s; }
+@keyframes tw2 { 50% { opacity: .55; transform: scale(.8); } }
+.ptr .bob { animation: bob .7s steps(2) infinite; }
+.ptr.up .bob { animation-name: bobup; }
+.ptr.side .bob { animation-name: none; }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+@keyframes bobup { 50% { transform: translateY(5px); } }
+.ptr .arrow { fill: var(--gold); stroke: #0b0620; stroke-width: 2; stroke-linejoin: miter; }
+.st-breathe .lb, .st-breathe .glow { animation: breathe var(--per, 3s) ease-in-out infinite; }
+.st-blink .lb, .st-blink .glow { animation: blink var(--per, 1s) steps(1) infinite; }
+@keyframes breathe { 0%, 100% { opacity: var(--min, .2); } 50% { opacity: 1; } }
+@keyframes blink { 0% { opacity: 1; } 50% { opacity: .07; } }
+.padbox.rumble svg.ctl { animation: rumble .09s steps(2) 5; }
+@keyframes rumble { 25% { transform: translate(-3px, 1px); } 75% { transform: translate(3px, -1px); } }
+.badge { position: absolute; left: 50%; transform: translateX(-50%); top: 8px; white-space: nowrap; z-index: 1;
+  background: var(--void); border: 2px solid var(--lc); padding: 0 9px; color: var(--muted); font-family: var(--vt); font-size: 17px; line-height: 1.3; }
+.badge b { color: var(--fg); font-weight: 400; }
+
+/* ---------- footer: status, hit counter, 88x31 buttons */
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; font-size: 12.5px; color: var(--muted); }
+.foot button { background: none; border: 0; padding: 0; color: var(--cyan); text-decoration: underline; cursor: pointer; font-size: 12.5px; }
+.foot button:hover { color: var(--gold); }
+.dot { display: inline-block; width: 9px; height: 9px; background: var(--muted); margin-right: 6px; vertical-align: 0; }
+.dot.on { background: var(--good); box-shadow: 0 0 8px var(--good); animation: blinkk 1.2s steps(1) infinite; }
+.keys { --bc: var(--cyan); font-size: 12.5px; color: var(--muted); background: var(--panel); padding: 10px 14px; margin: 3px; }
+.keys ul { margin: 0; padding-left: 18px; }
+.web1 { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; padding-top: 4px; }
+.counter { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.counter span { display: inline-flex; gap: 2px; }
+.counter i { font-style: normal; font-family: var(--vt); font-size: 20px; line-height: 1; width: 14px; text-align: center; padding: 2px 0; background: #000; color: #ff3030; border: 1px solid #555; text-shadow: 0 0 4px #ff3030; }
+.b88 { width: 88px; height: 31px; display: grid; place-items: center; text-align: center; font-family: "Press Start 2P", monospace; font-size: 6.5px; line-height: 1.5; padding: 2px;
+  border: 2px solid; border-color: #fff #444 #444 #fff; image-rendering: pixelated; }
+.b88.a { background: linear-gradient(180deg, #000 0 50%, #1d1d1d 50%); color: var(--gold); }
+.b88.b { background: repeating-linear-gradient(45deg, var(--hot) 0 4px, #c4169f 4px 8px); color: #fff; text-shadow: 1px 1px 0 #000; }
+.b88.c { background: linear-gradient(180deg, #0a3d0a, #000); color: var(--good); }
+
+/* ---------- level cards */
+.overlay { position: absolute; inset: 0; background: color-mix(in srgb, var(--void) 88%, transparent); display: grid; place-items: center; padding: 16px; z-index: 2; }
+.card-l { max-width: 440px; width: 100%; text-align: center; display: grid; gap: 12px; animation: pop .4s steps(4); }
+.card-l .eyebrow { font-family: "Press Start 2P", var(--cute), monospace; font-size: 10px; letter-spacing: .08em; color: var(--good); animation: blinkk 1s steps(1) infinite; }
+.card-l .eyebrow::before, .card-l .eyebrow::after { content: " ★ "; color: var(--gold); }
+.card-l h2 { font-family: var(--head); font-weight: 400; font-size: 28px; line-height: 1.25; margin: 0; text-wrap: balance;
+  color: #fff; text-shadow: 2px 2px 0 var(--hot), 4px 4px 0 var(--panel-lo); }
+html[lang="en"] .card-l h2 { font-size: 17px; line-height: 1.5; }
+.learned { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.learned span { background: var(--panel); padding: 2px 10px; font-size: 13px; border: 2px solid var(--cyan); }
+.swatches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; text-align: left; font-size: 13px; }
+@media (max-width: 480px) { .swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.swatches div { display: flex; align-items: center; gap: 8px; }
+.swatches i { width: 14px; height: 14px; flex: none; border: 2px solid var(--panel-lo); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.btn { cursor: pointer; padding: 8px 16px; color: var(--fg); background: var(--key); border: 3px solid; border-color: #6a5aa0 #0c0420 #0c0420 #6a5aa0; }
+.btn:active { border-color: #0c0420 #6a5aa0 #6a5aa0 #0c0420; }
+.btn.primary { background: var(--gold); color: var(--void); border-color: #fff8b8 #a88a00 #a88a00 #fff8b8; font-weight: 700; }
+.btn.primary .sym { background: transparent; color: var(--void); border-color: #a88a00; }
+.score { font-family: "Press Start 2P", monospace; font-size: 46px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--gold); text-shadow: 3px 3px 0 var(--hot), 6px 6px 0 var(--panel-lo); }
+
+/* sparkle cursor trail */
+.trail { position: fixed; z-index: 50; width: 10px; height: 10px; margin: -5px 0 0 -5px; pointer-events: none;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: fall .7s ease-in forwards; }
+@keyframes fall { to { transform: translateY(26px) scale(.2) rotate(90deg); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .st-breathe .lb, .st-breathe .glow, .st-blink .lb, .st-blink .glow, .hit.target .ring, .cur, .sticker, .ptr .bob, .brand, .spark, .marquee span,
+  .padbox, .padbox.rumble svg.ctl, .bubble.no, .new, .card-l, .card-l .eyebrow, .progress i.now, .dot.on, body::after { animation: none; }
+  .marquee span { padding-left: 0; }
+}
+@media (max-width: 520px) {
+  .say { font-size: 16.5px; } html[lang="en"] .say { font-size: 20px; }
+  .term .body { height: 176px; font-size: 17px; } .badge { display: none; } .brand { font-size: 22px; }
+  .coach { grid-template-columns: 40px minmax(0, 1fr); gap: 12px; } .avatar { width: 40px; height: 40px; font-size: 9px; border-width: 3px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand-wrap"><span class="spark" style="left:-6px;top:-4px"></span><span class="spark s2" style="right:-2px;top:2px"></span><span class="spark s3" style="right:22px;bottom:-6px"></span><div class="brand" id="brand">手柄驾校</div></div>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+    <div class="lang" role="group" aria-label="language">
+      <button id="lang-zh" type="button" aria-pressed="true">中文</button>
+      <button id="lang-en" type="button" aria-pressed="false">EN</button>
+    </div>
+  </header>
+  <div class="marquee" aria-hidden="true"><span id="marquee"></span></div>
+
+  <div class="term" aria-hidden="true">
+    <div class="bar"><b>claude.exe</b><span class="lvl" id="lvl"></span><span class="wb">_</span><span class="wb">□</span><span class="wb">×</span></div>
+    <div class="body" id="term-body"><div class="log" id="log"></div></div>
+  </div>
+
+  <div class="coach">
+    <div class="avatar" id="avatar">DS</div>
+    <div class="bubble pixbox" id="bubble" aria-live="polite">
+      <p class="say" id="say"></p>
+      <div class="sub" id="sub"></div>
+      <div class="timer" id="timer" hidden><i id="timer-bar"></i></div>
+    </div>
+  </div>
+
+  <div class="padbox" id="padbox">
+    <span class="spark" style="left:8px;top:8px"></span><span class="spark s2" style="right:10px;top:14px"></span><span class="spark s3" style="left:14px;bottom:12px"></span><span class="spark" style="right:16px;bottom:10px;animation-delay:.7s"></span>
+    <div class="glow"></div>
+    <span class="badge" id="light-badge"></span>
+    <svg class="ctl" id="ctl" viewBox="0 -14 640 424" role="img" aria-label="DualSense controller">
+      <defs>
+        <linearGradient id="g-shell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f1ecfb"/><stop offset="1" stop-color="#d9d1ee"/></linearGradient>
+        <linearGradient id="g-core" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a98bf0"/><stop offset=".6" stop-color="#7d5fd6"/><stop offset="1" stop-color="#5b3fb4"/></linearGradient>
+        <linearGradient id="g-sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d6cdef"/></linearGradient>
+        <radialGradient id="g-key" cx=".38" cy=".3" r=".85"><stop offset="0" stop-color="#ffffff"/><stop offset=".65" stop-color="#efeaff"/><stop offset="1" stop-color="#c9bdee"/></radialGradient>
+        <radialGradient id="g-stick" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#4a3a86"/><stop offset="1" stop-color="#241850"/></radialGradient>
+        <linearGradient id="g-pad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2dcf2"/></linearGradient>
+        <pattern id="p-glit" width="22" height="22" patternUnits="userSpaceOnUse">
+          <rect x="3" y="4" width="2" height="2" fill="#ff3fd8"/><rect x="14" y="2" width="1.5" height="1.5" fill="#3ff4ff"/>
+          <rect x="9" y="12" width="2" height="2" fill="#ffe34d"/><rect x="18" y="16" width="1.5" height="1.5" fill="#ff3fd8"/>
+          <rect x="4" y="18" width="1.5" height="1.5" fill="#a8ff3f"/>
+        </pattern>
+        <pattern id="p-glit-dark" width="26" height="26" patternUnits="userSpaceOnUse">
+          <rect x="5" y="6" width="1.5" height="1.5" fill="#ff3fd8"/><rect x="18" y="14" width="1.5" height="1.5" fill="#3ff4ff"/><rect x="11" y="21" width="1" height="1" fill="#fff"/>
+        </pattern>
+        <filter id="f-glow" x="-300%" y="-50%" width="700%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+      </defs>
+      <!-- shoulders: triggers behind, bumpers hugging the top edge; the shell hides their lower part -->
+      <g class="hit sh" data-btn="l2_full"><path class="k" d="M114 62 Q114 -4 168 -12 L228 -12 Q250 -10 250 10 L250 50 Z"/><path class="ring" d="M114 62 Q114 -4 168 -12 L228 -12 Q250 -10 250 10 L250 50 Z"/><text class="lbl on-sh" x="196" y="15" text-anchor="middle">L2</text></g>
+      <g class="hit sh" data-btn="r2_full"><path class="k" d="M114 62 Q114 -4 168 -12 L228 -12 Q250 -10 250 10 L250 50 Z" transform="matrix(-1 0 0 1 640 0)"/><path class="ring" d="M114 62 Q114 -4 168 -12 L228 -12 Q250 -10 250 10 L250 50 Z" transform="matrix(-1 0 0 1 640 0)"/><text class="lbl on-sh" x="444" y="15" text-anchor="middle">R2</text></g>
+      <g class="hit sh" data-btn="l1"><path class="k" d="M84 124 Q92 40 196 28 L254 28 L254 74 Z"/><path class="ring" d="M84 124 Q92 40 196 28 L254 28 L254 74 Z"/><text class="lbl on-sh" x="210" y="50" text-anchor="middle">L1</text></g>
+      <g class="hit sh" data-btn="r1"><path class="k" d="M84 124 Q92 40 196 28 L254 28 L254 74 Z" transform="matrix(-1 0 0 1 640 0)"/><path class="ring" d="M84 124 Q92 40 196 28 L254 28 L254 74 Z" transform="matrix(-1 0 0 1 640 0)"/><text class="lbl on-sh" x="430" y="50" text-anchor="middle">R1</text></g>
+      <!-- body: hard pixel shadow, pearl shell with glitter, black core like the real pad -->
+      <path d="M128 74 Q150 60 214 60 L426 60 Q490 60 512 74 Q546 96 560 150 L596 300 Q610 372 556 388 Q512 400 480 340 L450 292 L190 292 L160 340 Q128 400 84 388 Q30 372 44 300 L80 150 Q94 96 128 74 Z" transform="translate(8 9)" fill="#07001a"/>
+      <path class="shell" d="M128 74 Q150 60 214 60 L426 60 Q490 60 512 74 Q546 96 560 150 L596 300 Q610 372 556 388 Q512 400 480 340 L450 292 L190 292 L160 340 Q128 400 84 388 Q30 372 44 300 L80 150 Q94 96 128 74 Z"/>
+      <path d="M128 74 Q150 60 214 60 L426 60 Q490 60 512 74 Q546 96 560 150 L596 300 Q610 372 556 388 Q512 400 480 340 L450 292 L190 292 L160 340 Q128 400 84 388 Q30 372 44 300 L80 150 Q94 96 128 74 Z" fill="url(#p-glit)" opacity=".55" pointer-events="none"/>
+      <path d="M100 128 Q112 100 160 100 L480 100 Q528 100 540 128 L566 268 Q570 292 540 292 L100 292 Q70 292 74 268 Z" fill="url(#g-core)" stroke="#0b0620" stroke-width="3"/>
+      <path d="M100 128 Q112 100 160 100 L480 100 Q528 100 540 128 L566 268 Q570 292 540 292 L100 292 Q70 292 74 268 Z" fill="url(#p-glit)" opacity=".7" pointer-events="none"/>
+      <path d="M112 116 Q128 106 160 106 L300 106" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity=".45"/>
+      <!-- stickers on the grips -->
+      <g class="sticker"><path transform="translate(96 338) scale(1.5)" d="M0 -9 L2.6 -2.6 L9 0 L2.6 2.6 L0 9 L-2.6 2.6 L-9 0 L-2.6 -2.6 Z" fill="#ffe34d" stroke="#b48a00" stroke-width="1"/></g>
+      <g class="sticker s2"><path transform="translate(70 312) scale(.8)" d="M0 -9 L2.6 -2.6 L9 0 L2.6 2.6 L0 9 L-2.6 2.6 L-9 0 L-2.6 -2.6 Z" fill="#3ff4ff"/></g>
+      <g class="sticker s3"><path transform="translate(546 340) scale(1.3)" d="M0 -3 C-4 -10 -13 -6 -11 1 C-9 6 -3 9 0 12 C3 9 9 6 11 1 C13 -6 4 -10 0 -3 Z" fill="#ff3fd8" stroke="#a3108a" stroke-width="1"/></g>
+      <g class="sticker"><path transform="translate(574 312) scale(.7)" d="M0 -9 L2.6 -2.6 L9 0 L2.6 2.6 L0 9 L-2.6 2.6 L-9 0 L-2.6 -2.6 Z" fill="#ffffff"/></g>
+      <!-- light bar: glow behind, strip on top -->
+      <rect class="lb" x="219" y="74" width="12" height="92" rx="6" filter="url(#f-glow)"/>
+      <rect class="lb" x="409" y="74" width="12" height="92" rx="6" filter="url(#f-glow)"/>
+      <g class="hit" data-btn="touchpad"><rect class="k pad" x="236" y="70" width="168" height="98" rx="14"/><rect class="ring" x="232" y="66" width="176" height="106" rx="17"/><text class="lbl on-pad" x="320" y="124" text-anchor="middle">touchpad</text></g>
+      <rect class="lb" x="222" y="78" width="7" height="84" rx="3.5"/>
+      <rect class="lb" x="411" y="78" width="7" height="84" rx="3.5"/>
+      <g fill="#ffffff" opacity=".8"><circle cx="300" cy="184" r="3"/><circle cx="310" cy="184" r="3"/><circle cx="320" cy="184" r="3"/><circle cx="330" cy="184" r="3"/><circle cx="340" cy="184" r="3"/></g>
+      <g class="hit" data-btn="create"><rect class="k" x="200" y="76" width="14" height="30" rx="7"/><rect class="ring" x="194" y="70" width="26" height="42" rx="12"/><text class="lbl" x="207" y="124" text-anchor="middle">Create</text></g>
+      <g class="hit" data-btn="options"><rect class="k" x="426" y="76" width="14" height="30" rx="7"/><rect class="ring" x="420" y="70" width="26" height="42" rx="12"/><text class="lbl" x="433" y="124" text-anchor="middle">Options</text></g>
+      <g class="hit" data-btn="up"><rect class="k" x="153" y="116" width="26" height="32" rx="5"/><rect class="ring" x="149" y="112" width="34" height="40" rx="8"/><path d="M166 124 l-6 9 h12z" fill="#3a2a70"/></g>
+      <g class="hit" data-btn="down"><rect class="k" x="153" y="176" width="26" height="32" rx="5"/><rect class="ring" x="149" y="172" width="34" height="40" rx="8"/><path d="M166 200 l-6 -9 h12z" fill="#3a2a70"/></g>
+      <g class="hit" data-btn="left"><rect class="k" x="119" y="149" width="32" height="26" rx="5"/><rect class="ring" x="115" y="145" width="40" height="34" rx="8"/><path d="M127 162 l9 -6 v12z" fill="#3a2a70"/></g>
+      <g class="hit" data-btn="right"><rect class="k" x="181" y="149" width="32" height="26" rx="5"/><rect class="ring" x="177" y="145" width="40" height="34" rx="8"/><path d="M205 162 l-9 -6 v12z" fill="#3a2a70"/></g>
+      <g class="hit" data-btn="triangle"><circle class="k" cx="474" cy="124" r="18"/><circle class="ring" cx="474" cy="124" r="23"/><path d="M474 113 l10 16 h-20z" fill="none" stroke="var(--tri)" stroke-width="3" stroke-linejoin="round"/></g>
+      <g class="hit" data-btn="circle"><circle class="k" cx="512" cy="162" r="18"/><circle class="ring" cx="512" cy="162" r="23"/><circle cx="512" cy="162" r="8.5" fill="none" stroke="var(--cir)" stroke-width="3"/></g>
+      <g class="hit" data-btn="cross"><circle class="k" cx="474" cy="200" r="18"/><circle class="ring" cx="474" cy="200" r="23"/><path d="M467 193 l14 14 M481 193 l-14 14" stroke="var(--crs)" stroke-width="3" stroke-linecap="round"/></g>
+      <g class="hit" data-btn="square"><circle class="k" cx="436" cy="162" r="18"/><circle class="ring" cx="436" cy="162" r="23"/><rect x="429" y="155" width="14" height="14" rx="1.5" fill="none" stroke="var(--sqr)" stroke-width="3"/></g>
+      <g class="hit stick" data-stick="l"><circle class="k stk" cx="238" cy="240" r="38"/><circle class="ring" cx="238" cy="240" r="44"/><circle cx="238" cy="240" r="27" fill="none" stroke="#8f7fd0" stroke-width="3" stroke-dasharray="2 4"/><circle cx="238" cy="240" r="19" fill="#1a1236"/><text class="lbl on-key" x="238" y="245" text-anchor="middle">L3</text></g>
+      <g class="hit stick" data-stick="r"><circle class="k stk" cx="402" cy="240" r="38"/><circle class="ring" cx="402" cy="240" r="44"/><circle cx="402" cy="240" r="27" fill="none" stroke="#8f7fd0" stroke-width="3" stroke-dasharray="2 4"/><circle cx="402" cy="240" r="19" fill="#1a1236"/><text class="lbl on-key" x="402" y="245" text-anchor="middle">R3</text></g>
+      <g class="hit" data-btn="ps"><circle class="k dk" cx="320" cy="226" r="14"/><circle class="ring" cx="320" cy="226" r="19"/><text class="lbl on-key" x="320" y="231" text-anchor="middle">PS</text></g>
+      <g class="hit" data-btn="mic"><rect class="k dk" x="303" y="252" width="34" height="11" rx="5.5"/><rect class="ring" x="298" y="247" width="44" height="21" rx="10"/><text class="lbl" x="320" y="283" text-anchor="middle">mic</text></g>
+      <g id="pointers" pointer-events="none"></g>
+    </svg>
+    <div class="overlay" id="overlay" hidden></div>
+  </div>
+
+  <div class="foot">
+    <span><span class="dot" id="pad-dot"></span><span id="pad-text"></span></span>
+    <span><button type="button" id="keys-btn"></button> · <button type="button" id="restart-btn"></button></span>
+  </div>
+  <div class="keys pixbox" id="keys" hidden><ul id="keys-list"></ul></div>
+  <div class="web1">
+    <span class="counter"><span id="visits-label"></span><span id="visits" aria-hidden="true"></span></span>
+    <span class="b88 a" aria-hidden="true">BEST VIEWED WITH DUALSENSE</span>
+    <span class="b88 b" aria-hidden="true">✦ dsagent ✦<br>POWERED</span>
+    <span class="b88 c" aria-hidden="true">NO KEYS SENT<br>PRACTICE OK</span>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("padschool2:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("padschool2:" + k, JSON.stringify(v)); } catch {} },
+};
+const S = { lang: store.get("lang", "zh") };
+const T = (o) => (o && typeof o === "object" && !Array.isArray(o) ? (o[S.lang] ?? o.zh) : o);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const rich = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); // **x** marks what to press
+
+// ------------------------------------------------------------------ facts (dsagent defaults)
+const LIGHTS = {
+  idle:       { rgb: [90, 90, 110], kind: "breathe", per: 5, min: .15, zh: "空闲", en: "Idle" },
+  thinking:   { rgb: [0, 90, 255], kind: "breathe", per: 2.2, min: .2, zh: "思考中", en: "Thinking" },
+  tool:       { rgb: [255, 130, 0], kind: "breathe", per: 1.2, min: .35, zh: "跑命令", en: "Running a command" },
+  permission: { rgb: [255, 120, 0], kind: "blink", per: .7, zh: "等你批准", en: "Needs approval" },
+  waiting:    { rgb: [255, 200, 0], kind: "breathe", per: 3, min: .3, zh: "等你回答", en: "Waiting for you" },
+  done:       { rgb: [0, 255, 60], kind: "solid", zh: "做完了", en: "Done" },
+  error:      { rgb: [255, 0, 0], kind: "blink", per: 1.2, zh: "出错了", en: "Error" },
+  listening:  { rgb: [255, 255, 255], kind: "breathe", per: 1, min: .3, zh: "在听你说", en: "Listening" },
+};
+const WHEEL = [
+  { zh: "继续", en: "Continue" }, { zh: "运行测试并修复失败的用例", en: "Run tests, fix failures" },
+  { zh: "解释一下你刚才做了什么", en: "Explain what you did" }, { zh: "先停下来，问我再继续", en: "Stop and ask me first" },
+  { zh: "提交代码", en: "Commit the code" }, { zh: "给这部分写测试", en: "Write tests for this" },
+  { zh: "总结一下改动", en: "Summarize the changes" }, { zh: "继续修这个 bug", en: "Keep fixing this bug" },
+];
+const NAMES = { cross: "✕", circle: "○", square: "□", triangle: "△", up: "↑", down: "↓", left: "←", right: "→",
+  l1: "L1", r1: "R1", l2_full: "L2", r2_full: "R2", l3: "L3", r3: "R3", ps: "PS", mic: { zh: "麦克风键", en: "Mic" },
+  touchpad: { zh: "触摸板", en: "Touchpad" }, create: "Create", options: "Options" };
+const ARROW = { zh: "方向键", en: "arrow key" };
+const DOES = {
+  cross: { zh: "发送 / 批准", en: "send / approve" }, r2_full: { zh: "和 ✕ 一样", en: "same as ✕" },
+  circle: { zh: "取消 / 拒绝 / 打断", en: "cancel / deny / interrupt" }, l2_full: { zh: "和 ○ 一样", en: "same as ○" },
+  square: { zh: "清空输入框", en: "clear the input" }, triangle: { zh: "发送 continue", en: "send “continue”" },
+  up: ARROW, down: ARROW, left: ARROW, right: ARROW, stick_up: ARROW, stick_down: ARROW, stick_left: ARROW, stick_right: ARROW,
+  rstick_up: { zh: "向上翻页", en: "page up" }, rstick_down: { zh: "向下翻页", en: "page down" },
+  rstick_left: { zh: "切到上一个会话", en: "previous session" }, rstick_right: { zh: "切到下一个会话", en: "next session" },
+  l1: { zh: "切换权限模式", en: "cycle permission mode" }, r1: { zh: "打出 /", en: "type /" },
+  options: { zh: "看完整记录", en: "show the transcript" }, create: { zh: "切换控制的会话", en: "switch the controlled session" },
+  create_hold: { zh: "开新对话", en: "new conversation" }, ps: { zh: "显示电量", en: "show battery" },
+  ps_hold: { zh: "中断（Ctrl+C）", en: "interrupt (Ctrl+C)" }, mic: { zh: "语音输入", en: "dictation" },
+  touchpad: { zh: "回退到之前的消息", en: "rewind" }, l3: { zh: "打开菜单", en: "open the menu" }, r3: { zh: "重发上一条", en: "retry the last prompt" },
+  "r1+cross": { zh: "选第 1 项", en: "pick option 1" }, "r1+circle": { zh: "选第 2 项", en: "pick option 2" },
+  "r1+square": { zh: "选第 3 项", en: "pick option 3" }, "r1+triangle": { zh: "选第 4 项", en: "pick option 4" },
+  "ps+up": { zh: "灯调亮", en: "brighter" }, "ps+down": { zh: "灯调暗", en: "dimmer" },
+  "ps+right": { zh: "震动加强", en: "stronger rumble" }, "ps+left": { zh: "震动减弱", en: "weaker rumble" },
+  "ps+square": { zh: "待机灯开关", en: "idle light on/off" }, "ps+triangle": { zh: "提示音开关", en: "sounds on/off" },
+  "ps+mic": { zh: "锁定手柄", en: "lock the pad" }, "l1+cross": { zh: "排队发送", en: "queue the message" },
+  "l1+circle": { zh: "停止子代理", en: "stop subagents" }, "l1+square": { zh: "撤销", en: "undo" },
+  "l1+triangle": { zh: "外部编辑器", en: "external editor" }, "l1+up": { zh: "选模型", en: "pick the model" }, "l1+down": { zh: "思考模式开关", en: "thinking on/off" },
+};
+function nameOf(a) {
+  if (a.startsWith("wheel_pick:")) return { zh: "提示轮盘", en: "Prompt wheel" };
+  if (a.endsWith("_hold")) return { zh: "长按 " + T(NAMES[a.slice(0, -5)]), en: "Hold " + T(NAMES[a.slice(0, -5)]) };
+  if (a.startsWith("stick_")) return { zh: "左摇杆" + T(NAMES[a.slice(6)]), en: "Left stick " + T(NAMES[a.slice(6)]) };
+  if (a.startsWith("rstick_")) return { zh: "右摇杆" + T(NAMES[a.slice(7)]), en: "Right stick " + T(NAMES[a.slice(7)]) };
+  return a.split("+").map((p) => T(NAMES[p]) || p).join(" + ");
+}
+const doesOf = (a) => DOES[a] || { zh: "这里没绑定功能", en: "nothing bound here" };
+
+// ------------------------------------------------------------------ the tutorial script
+const L = (cls, zh, en) => ({ cls, t: en === undefined ? zh : { zh, en } });
+const you = (zh, en) => L("c-you", "> " + zh, "> " + (en ?? zh));
+const approval = (cmd) => ({ cls: "box", lines: [L("c-warn", "Bash command"), L("", "  " + cmd), L("", "要执行吗？", "Do you want to proceed?"), L("c-acc", "❯ 1. Yes"), L("c-dim", "  2. No")] });
+
+const LEVELS = [
+  { zh: "第一次对话", en: "First chat", learned: ["✕", "○", "△"] },
+  { zh: "输入框", en: "The input box", learned: ["R3", "□", "R1", "L1"] },
+  { zh: "组合键", en: "Combos", learned: ["R1 + ○", "L1 + ✕", "PS + △", { zh: "PS + 麦克风", en: "PS + Mic" }] },
+  { zh: "高手技巧", en: "Pro moves", learned: [{ zh: "提示轮盘", en: "Prompt wheel" }, { zh: "右摇杆", en: "Right stick" }, { zh: "长按 Create", en: "Hold Create" }, { zh: "麦克风", en: "Mic" }] },
+];
+const STEPS = [
+  // ---- level 1: first chat
+  { lv: 0, light: "idle", intro: true,
+    say: { zh: "欢迎来到手柄驾校！接下来几分钟，你会用手柄指挥 Claude 干活。按 **✕** 开始。", en: "Welcome to Pad School! In a few minutes you'll be running Claude from a controller. Press **✕** to start." } },
+  { lv: 0, light: "thinking", show: [you("修一下登录页的 bug", "fix the login page bug"), L("c-dim", "✻ Thinking…")],
+    say: { zh: "你刚让 Claude 修一个 bug。看手柄的光条：**蓝色慢慢呼吸**，表示它在思考。按 **✕** 继续。", en: "You just asked Claude to fix a bug. Look at the lightbar: **slow blue breathing** means it's thinking. Press **✕** to go on." } },
+  { lv: 0, light: "permission", rumble: true, box: approval("npm test"), expect: ["cross", "r2_full"],
+    say: { zh: "光条变成**橙色快闪**，手柄还震了两下：它要你批准。它想跑测试，按 **✕** 批准。", en: "**Fast orange blinking** and two rumbles: it wants your approval. It wants to run the tests. Press **✕** to approve." },
+    q: { zh: "橙灯快闪，它想跑 npm test，你同意。", en: "Orange blinking: it wants to run npm test, and you agree." },
+    ok: { zh: "终端里 ✕ 就是回车；在桌面版，手柄直接帮你点批准。R2 扣到底也一样。", en: "In the terminal ✕ is Enter; in the desktop app the pad approves for you. A full R2 pull works too." },
+    after: [L("c-dim", "● Bash(npm test)"), L("c-ok", "✓ 41 passed · 1 failed"), L("", "修好了 2 处。还剩 1 个时区问题，要继续吗？", "Fixed 2 spots. One time-zone issue left. Continue?")], end: "done" },
+  { lv: 0, light: "done", expect: ["triangle"],
+    say: { zh: "**绿色常亮** = 这一轮做完了。它问要不要继续：按 **△**，等于打出 continue 并发送。", en: "**Solid green** = this turn is done. It asks whether to go on: press **△** to send “continue”." },
+    q: { zh: "绿灯常亮，它问要不要继续，你说继续。", en: "Solid green: it asks whether to go on. Tell it to continue." },
+    ok: { zh: "△ 是最常用的“接着干”。", en: "△ is your everyday “keep going”." },
+    after: [you("continue"), L("c-dim", "✻ Thinking…")], end: "thinking" },
+  { lv: 0, light: "permission", rumble: true, box: approval("rm -rf build/"), expect: ["circle", "l2_full"],
+    say: { zh: "又要批准了：它想删掉整个 build 目录。不行！按 **○** 拒绝。", en: "Another approval: it wants to delete the whole build folder. No way! Press **○** to deny." },
+    q: { zh: "它想 rm -rf build/，你不同意。", en: "It wants to rm -rf build/. You say no." },
+    ok: { zh: "○ 是取消。拒绝后 Claude 会换个办法，或者问你。", en: "○ means cancel. After a denial Claude tries another way or asks you." },
+    after: [L("c-warn", "已拒绝 · Claude：好，我不删，换个办法。", "Denied · Claude: OK, I'll leave it.")], end: "thinking" },
+  { lv: 0, light: "thinking", show: [L("c-dim", "✻ 正在写一篇 3000 字的项目历史…", "✻ Writing a 3,000-word project history…")], expect: ["circle", "ps_hold"],
+    say: { zh: "糟糕，它跑偏了，开始写没人要的长文。按 **○** 打断它。", en: "Uh-oh, it went off track and is writing an essay nobody asked for. Press **○** to interrupt." },
+    q: { zh: "它跑偏了，在写没人要的长文。让它停下。", en: "It's writing an essay nobody wants. Stop it." },
+    ok: { zh: "○ 发出 Esc，停下这一轮。更狠的是长按 PS（Ctrl+C）。", en: "○ sends Esc and stops the turn. The heavy version is holding PS (Ctrl+C)." },
+    after: [L("c-warn", "⎿ Interrupted by user")], end: "idle" },
+  // ---- level 2: the input box
+  { lv: 1, light: "idle", expect: ["r3"],
+    say: { zh: "其实刚才那条你还想要。原样再发一次：按 **R3**（把右摇杆按下去）。", en: "Actually you still want that one. Send it again as-is: press **R3** (click the right stick)." },
+    q: { zh: "刚才那条被打断了，原样再发一次。", en: "You interrupted it. Send the same prompt again." },
+    ok: { zh: "R3 重发上一条。桌面版只把它填进输入框，你再按 ✕ 发出去。", en: "R3 resends the last prompt. The desktop app only fills it into the box; press ✕ to send." },
+    after: [you("continue"), L("c-ok", "✓ 时区问题也修好了，测试全部通过", "✓ Time-zone issue fixed, all tests pass")], end: "done" },
+  { lv: 1, light: "done", input: { zh: "rnu teh tsets agian plz", en: "rnu teh tsets agian plz" }, expect: ["square"], clearInput: true,
+    say: { zh: "你在输入框里打了一串错字。按 **□** 清空。", en: "You typed a mess into the input box. Press **□** to clear it." },
+    q: { zh: "输入框里一串错字，清掉。", en: "The input box is full of typos. Clear it." },
+    ok: { zh: "□ 清空输入框。", en: "□ clears the input box." }, end: "idle" },
+  { lv: 1, light: "idle", expect: ["r1"],
+    say: { zh: "想用斜杠命令，比如 /compact？单按 **R1**，打出一个斜杠。", en: "Want a slash command like /compact? Tap **R1** to type a slash." },
+    q: { zh: "想用 /compact 命令，先打出斜杠。", en: "You want /compact. Type the slash first." },
+    ok: { zh: "接着用十字键在菜单里选，✕ 确认。", en: "Then pick from the menu with the d-pad and confirm with ✕." },
+    after: [L("c-acc", "/  ❯ /compact   /clear   /model   /review …")], end: "idle" },
+  { lv: 1, light: "idle", show: [L("c-dim", "⏵⏵ accept edits on (shift+tab to cycle)")], expect: ["l1"],
+    say: { zh: "下一件事想让它先出方案再动手。按 **L1** 切换到计划模式。", en: "For the next job you want a plan first. Press **L1** to switch to plan mode." },
+    q: { zh: "想让它先出方案，切换到计划模式。", en: "You want a plan first. Switch to plan mode." },
+    ok: { zh: "L1 就是 Shift+Tab，在三种权限模式之间轮换。", en: "L1 is Shift+Tab: it cycles the three permission modes." },
+    after: [L("c-acc", "⏸ plan mode on")], end: "idle" },
+  // ---- level 3: combos
+  { lv: 2, light: "idle",
+    say: { zh: "R1、L1、PS 是**修饰键**，像键盘上的 Shift：按住它，再按别的键。没手柄的话，在图上点一下 R1 就算“按住”了。按 **✕** 继续。", en: "R1, L1 and PS are **modifiers**, like Shift on a keyboard: hold one, then press another key. Without a controller, clicking R1 on the picture counts as holding it. Press **✕** to go on." } },
+  { lv: 2, light: "done", show: [L("c-ok", "✓ 登录页重构完了", "✓ Login page refactor done")], expect: ["r1+circle"],
+    box: { cls: "box card", lines: [L("c-acc", "下一步？", "What next?"), L("", "  [1] 提交", "  [1] Commit"), L("", "  [2] 再跑一遍测试", "  [2] Run the tests again"), L("", "  [3] 先不管", "  [3] Leave it")] },
+    say: { zh: "它给了三个下一步。按住 **R1**，再按 **○**，选第 2 个。", en: "It offers three next steps. Hold **R1** and press **○** to pick the 2nd." },
+    q: { zh: "下一步卡片有三个选项，选第 2 个。", en: "The next-step card has three options. Pick the 2nd." },
+    ok: { zh: "R1 + ✕ ○ □ △ 分别选第 1、2、3、4 项。", en: "R1 + ✕ ○ □ △ pick options 1, 2, 3, 4." },
+    after: [you("再跑一遍测试", "Run the tests again"), L("c-dim", "● Bash(npm test)")], end: "tool" },
+  { lv: 2, light: "tool", input: { zh: "顺便更新一下 CHANGELOG", en: "also update the CHANGELOG" }, expect: ["l1+cross"], clearInput: true,
+    say: { zh: "它正忙着（**橙色呼吸** = 在跑命令），你想补一句又不想打断它：按住 **L1** 再按 **✕**，排队发送。", en: "It's busy (**orange breathing** = running a command). To add something without interrupting: hold **L1** and press **✕** to queue it." },
+    q: { zh: "它正忙，你想补一句但不打断它。", en: "It's busy; add a message without interrupting." },
+    ok: { zh: "这一轮做完，它会自动发出去。", en: "It goes out by itself when this turn ends." },
+    after: [L("c-acc", "⧗ 已排队", "⧗ Queued")], end: "done" },
+  { lv: 2, light: "done", expect: ["ps+triangle"],
+    say: { zh: "做完时手柄喇叭会“叮”一声。夜深了，按住 **PS** 再按 **△**，关掉提示音。", en: "When a turn ends the pad's speaker goes “ding”. It's late: hold **PS** and press **△** to turn the sounds off." },
+    q: { zh: "夜深了，关掉手柄的提示音。", en: "It's late. Turn the pad's sounds off." },
+    ok: { zh: "提示音只在 USB 连接时有：叮 = 完成，Ping = 要批准，低音 = 出错。", en: "Sounds play over USB only: Glass = done, Ping = approval, Basso = error." },
+    after: [L("c-acc", "🔇 提示音已关", "🔇 Sounds off")], end: "done" },
+  { lv: 2, light: "idle", expect: ["ps+mic"],
+    say: { zh: "要把手柄借朋友玩一会儿？先锁住：按住 **PS** 再按 **麦克风键**。", en: "Lending the pad to a friend for a bit? Lock it first: hold **PS** and press **Mic**." },
+    q: { zh: "要把手柄借给别人，先锁住。", en: "You're lending the pad out. Lock it." },
+    ok: { zh: "锁定后所有键都失效，审批交还屏幕。同样的组合再按一次解锁。", en: "Locked: every key is ignored and approvals go back to the screen. The same combo unlocks." },
+    after: [L("c-acc", "🔒 已锁定", "🔒 Locked")], end: "idle" },
+  // ---- level 4: pro moves
+  { lv: 3, light: "done", wheel: true, expect: ["wheel_pick:4"],
+    say: { zh: "**提示轮盘**：按住 **△** 不放，把摇杆**往下**推，然后松开 △，发出“提交代码”。（用鼠标：按住 △ 往下拖）", en: "**Prompt wheel**: hold **△**, push a stick **down**, then let go of △ to send “Commit the code”. (Mouse: hold △ and drag down.)" },
+    ok: { zh: "8 个方向各一条常用指令，可以在配置里改成你自己的。", en: "Eight directions, eight everyday prompts; change them in the config." },
+    after: [you("提交代码", "Commit the code"), L("c-ok", "✓ Committed 3 files")], end: "done" },
+  { lv: 3, light: "permission", rumble: true, show: [L("c-warn", "另一个会话 web-app 在等你批准", "Another session, web-app, wants approval")], expect: ["rstick_right", "rstick_left"],
+    say: { zh: "你同时开着两个会话，另一个在等批准。把**右摇杆往右**推，切过去。", en: "You have two sessions open and the other one needs approval. Push the **right stick right** to switch." },
+    q: { zh: "另一个会话在等批准，切过去。", en: "Another session needs approval. Switch to it." },
+    ok: { zh: "右摇杆左右切换会话。有会话要批准时，手柄也会自己跳过去。", en: "Right stick left/right switches sessions. A session that needs approval also grabs the pad by itself." },
+    after: [L("c-acc", "→ 现在控制：web-app", "→ Now controlling: web-app")], end: "done" },
+  { lv: 3, light: "done", expect: ["create_hold"],
+    say: { zh: "这件事做完了，开个新对话：**长按 Create**（左上角的小键），约一秒再松手。", en: "This job's done; start fresh: **hold Create** (the small key top-left) for about a second." },
+    q: { zh: "这件事做完了，开个新对话。", en: "Job done. Start a new conversation." },
+    ok: { zh: "终端里是 /clear，桌面版是 ⌘N。", en: "/clear in the terminal, ⌘N in the desktop app." },
+    after: [L("c-acc", "/clear"), L("c-dim", "（新对话）", "(new conversation)")], end: "idle" },
+  { lv: 3, light: "idle", expect: ["mic"],
+    say: { zh: "最后一招：不想打字？按 **麦克风键**，直接说。", en: "Last trick: don't feel like typing? Press **Mic** and just talk." },
+    q: { zh: "不想打字，想直接说。", en: "You'd rather talk than type." },
+    ok: { zh: "再按一次结束。按住超过半秒就是“按住说话”，松开就停。", en: "Press again to stop. Hold it over half a second for push-to-talk." },
+    after: [L("c-acc", "🎙 正在听…", "🎙 Listening…")], end: "listening" },
+  { lv: 3, light: "error", rumble: true, show: [L("c-err", "✗ API Error: 529 Overloaded")],
+    say: { zh: "还有一种灯你会遇到：**红色闪** + 重重一震 = 出错了。不用管，30 秒后它自己恢复。按 **✕** 毕业！", en: "One more light you'll meet: **red blinking** plus a heavy rumble = an error. It clears itself after 30 s. Press **✕** to graduate!" } },
+];
+
+// ------------------------------------------------------------------ state + rendering
+const G = { step: Math.min(store.get("step", 0), STEPS.length), phase: "ask", misses: 0, lines: [], fresh: 0, input: "", light: "idle", rush: null };
+
+function setLight(name) {
+  const l = LIGHTS[name] || LIGHTS.idle;
+  G.light = name;
+  dsPost("/light", { state: LIGHTS[name] ? name : "idle" });
+  const box = $("padbox"), rgb = "rgb(" + l.rgb.join(",") + ")";
+  box.style.setProperty("--lc", rgb);
+  document.documentElement.style.setProperty("--lc", rgb);
+  box.style.setProperty("--per", (l.per || 1) + "s");
+  box.style.setProperty("--min", l.min ?? .2);
+  box.classList.remove("st-breathe", "st-blink");
+  if (l.kind !== "solid") box.classList.add("st-" + l.kind);
+  $("avatar").style.borderColor = rgb;
+  $("light-badge").innerHTML = esc(S.lang === "zh" ? "光条 " : "Light ") + "<b></b>";
+  $("light-badge").querySelector("b").textContent = T(l);
+}
+// Real vibration through the Gamepad API (Chrome-family browsers support "dual-rumble" on a DualSense),
+// mirroring dsagent's rumble patterns: [ms, strong, weak]; zeros are gaps.
+const RUMBLE = {
+  attention: [[200, .8, .5], [90, 0, 0], [200, .8, .5]],
+  error: [[450, 1, .2]],
+  tick: [[60, 0, .45]],
+};
+function padRumble(kind) {
+  if (DS.on) { dsPost("/rumble", { pattern: kind }); return; }
+  const g = livePad();
+  const act = g && g.vibrationActuator;
+  if (!act || !RUMBLE[kind]) return;
+  let t = 0;
+  for (const [ms, strong, weak] of RUMBLE[kind]) {
+    if (strong || weak) setTimeout(() => { try { act.playEffect("dual-rumble", { duration: ms, strongMagnitude: strong, weakMagnitude: weak }).catch(() => {}); } catch {} }, t);
+    t += ms;
+  }
+}
+function rumble(kind) {
+  const p = $("padbox"); p.classList.remove("rumble"); void p.offsetWidth; p.classList.add("rumble");
+  padRumble(kind || "attention");
+}
+function lineEl(l, isNew) {
+  const d = document.createElement("div");
+  d.className = "ln " + (l.cls || "") + (isNew ? " new" : "");
+  d.textContent = T(l.t);
+  return d;
+}
+function pushLines(ls) { G.lines.push(...ls); G.lines = G.lines.slice(-30); G.fresh = ls.length; }
+function renderLog(temp) {
+  const log = $("log"); log.textContent = "";
+  G.lines.forEach((l, i) => log.appendChild(lineEl(l, i >= G.lines.length - G.fresh)));
+  if (temp && temp.box) {
+    const b = document.createElement("div"); b.className = temp.box.cls;
+    temp.box.lines.forEach((l) => b.appendChild(lineEl(l)));
+    log.appendChild(b);
+  }
+  if (temp && temp.wheel) log.appendChild(wheelEl());
+  const inp = document.createElement("div"); inp.className = "input";
+  inp.textContent = "> " + (G.input ? T(G.input) : "");
+  const c = document.createElement("span"); c.className = "cur"; inp.appendChild(c);
+  log.appendChild(inp);
+  const body = $("term-body"); body.scrollTop = body.scrollHeight;
+}
+let wheelSel = null;
+function wheelEl() {
+  const w = document.createElement("div"); w.className = "wheel"; w.id = "wheel";
+  for (const n of [7, 0, 1, 6, -1, 2, 5, 4, 3]) {
+    const d = document.createElement("div");
+    if (n < 0) { d.className = "hub"; d.textContent = "△"; }
+    else { d.textContent = T(WHEEL[n]); d.dataset.sector = n; if (wheelSel === n) d.className = "sel"; }
+    w.appendChild(d);
+  }
+  return w;
+}
+function updateWheel() { const w = $("wheel"); w && w.querySelectorAll("[data-sector]").forEach((d) => d.classList.toggle("sel", +d.dataset.sector === wheelSel)); }
+
+function targetEls(action) {
+  const q = (s) => document.querySelector(s);
+  if (action.startsWith("wheel_pick")) return [q('[data-btn="triangle"]'), q('[data-stick="l"]'), q('[data-stick="r"]')];
+  const base = action.replace(/_hold$/, "");
+  if (/^rstick_|^r3$/.test(base)) return [q('[data-stick="r"]')];
+  if (/^stick_|^l3$/.test(base)) return [q('[data-stick="l"]')];
+  return base.split("+").map((p) => q('[data-btn="' + p + '"]'));
+}
+function spotlight(actions) {
+  document.querySelectorAll(".hit.target").forEach((g) => g.classList.remove("target"));
+  $("ctl").classList.toggle("spotlight", !!(actions && actions.length));
+  const els = [];
+  for (const a of actions || []) targetEls(a).forEach((el) => { if (el && !els.includes(el)) { el.classList.add("target"); els.push(el); } });
+  placePointers(els);
+}
+// A bouncing pixel arrow over each key to press.
+const SIDE_PTR = { l2_full: [112, 34, "r"], r2_full: [528, 34, "l"], l1: [88, 92, "r"], r1: [552, 92, "l"] };
+function placePointers(els) {
+  const layer = $("pointers"); if (!layer) return;
+  layer.textContent = "";
+  els.slice(0, 3).forEach((el) => {
+    const side = SIDE_PTR[el.dataset.btn];
+    if (side) {                                              // shoulders: point in from the outside
+      const [x, y, dir] = side;
+      layer.insertAdjacentHTML("beforeend", '<g class="ptr side" transform="translate(' + x + " " + y + ')"><g class="bob">' +
+        '<path class="arrow" d="M-7 -20 H7 V-11 H14 L0 0 L-14 -11 H-7 Z" transform="rotate(' + (dir === "r" ? -90 : 90) + ')"/></g></g>');
+      return;
+    }
+    let b; try { b = el.getBBox(); } catch { return; }
+    const cx = b.x + b.width / 2, up = b.y < 44;            // keys at the top get the arrow from below
+    const y = up ? b.y + b.height + 2 : b.y - 2;
+    const arrow = "M-7 -20 H7 V-11 H14 L0 0 L-14 -11 H-7 Z";
+    layer.insertAdjacentHTML("beforeend",
+      '<g class="ptr' + (up ? " up" : "") + '" transform="translate(' + cx + " " + y + ')"><g class="bob">' +
+      '<path class="arrow" d="' + arrow + '"' + (up ? ' transform="scale(1 -1)"' : "") + "/></g></g>");
+  });
+}
+function coach(sayHtml, subHtml, subCls) {
+  $("bubble").className = "bubble";
+  $("say").innerHTML = sayHtml;
+  $("sub").className = "sub" + (subCls ? " " + subCls : "");
+  $("sub").innerHTML = subHtml || "";
+}
+function renderProgress() {
+  const p = $("progress"); p.textContent = "";
+  STEPS.forEach((_, i) => { const d = document.createElement("i"); if (i < G.step) d.className = "done"; else if (i === G.step) d.className = "now"; p.appendChild(d); });
+  const st = STEPS[G.step];
+  $("lvl").textContent = st ? (S.lang === "zh" ? "第 " + (st.lv + 1) + " 关 · " : "Level " + (st.lv + 1) + " · ") + T(LEVELS[st.lv]) : "";
+}
+const cont = () => '<span class="cta"><span class="sym">✕</span> ' + esc(S.lang === "zh" ? "继续" : "Continue") + "</span>";
+
+// ------------------------------------------------------------------ flow
+function openStep(fresh) {
+  hideOverlay();
+  G.phase = "ask"; G.misses = 0; wheelSel = null;
+  const st = STEPS[G.step];
+  if (!st) return graduate();
+  if (fresh !== false) {
+    if (st.show) pushLines(st.show); else G.fresh = 0;
+    if (st.input) G.input = st.input;
+  }
+  setLight(st.light);
+  if (st.rumble && fresh !== false) rumble(st.light === "error" ? "error" : "attention");
+  renderLog(st);
+  renderProgress();
+  spotlight(st.expect ? st.expect.slice(0, 1) : ["cross"]);
+  let sub = "";
+  if (st.intro) sub = '<div class="note">' + (S.lang === "zh"
+    ? (DS.on ? "真手柄已接上，现在是练习模式：你按的键只在这个网页里生效，不会发给 Claude；关掉这个网页就退出练习。没手柄的话，也可以点图上的键或用键盘（见底下“键盘怎么按”）。"
+             : "没手柄也行：直接点图上的键，或用键盘（见底下“键盘怎么按”）。想用真手柄练习，请在 Claude Code 里输入 <code>/dualsense:tutorial</code>（或在终端运行 <code>dsagent tutorial</code>）打开本页：那样打开的页面能读到手柄，按键也不会发给 Claude。")
+    : (DS.on ? "Your controller is connected and you are in practice mode: presses only count on this page and never reach Claude. Closing this page ends practice. You can also click the keys on the picture or use the keyboard (see “Keyboard keys” below)."
+             : "No controller? Click the keys on the picture or use the keyboard (see “Keyboard keys” below). To practise with the real controller, type <code>/dualsense:tutorial</code> in Claude Code (or run <code>dsagent tutorial</code>) to open this page: opened that way it reads the controller, and your presses won't reach Claude.")) + "</div>";
+  if (!st.intro && gpName && !DS.on) {
+    const keys = (st.expect || []).flatMap((a) => a.replace(/_hold$/, "").split("+"));
+    if (keys.includes("ps") || keys.includes("mic")) sub = padNote(keys.includes("ps"), keys.includes("mic"));
+  }
+  coach(rich(T(st.say)), sub);
+  store.set("step", G.step);
+}
+function padNote(ps, mic) {
+  const zh = [], en = [];
+  if (ps) { zh.push("浏览器直接读手柄时，macOS 也看得到 PS 键，按 PS 可能会打开 Apple「游戏」App：这一步请用鼠标点图上的 PS（或按键盘 P）。用 /dualsense:tutorial 打开本页就没有这个问题。");
+            en.push("When the browser reads the controller itself, macOS sees the PS button too and may open Apple's Games app: click PS on the picture instead (or press P). Opening this page with /dualsense:tutorial avoids this."); }
+  if (mic) { zh.push("浏览器读不到手柄上的麦克风键：请点图上的麦克风键（或按键盘 M）。");
+             en.push("Browsers can't read the controller's mic button: click Mic on the picture (or press M)."); }
+  return '<div class="note">' + esc((S.lang === "zh" ? zh : en).join(" ")) + "</div>";
+}
+function succeed(st, action) {
+  G.phase = "after";
+  padRumble("tick");
+  targetEls(action).forEach((el) => { if (!el) return; el.classList.add("hit-ok"); setTimeout(() => el.classList.remove("hit-ok"), 500); });
+  spotlight([]);
+  if (!st.expect) return advance();
+  if (st.after) pushLines(st.after); else G.fresh = 0;
+  if (st.clearInput) G.input = "";
+  if (st.end) setLight(st.end);
+  renderLog(null);
+  showOk(st);
+}
+function showOk(st) {
+  $("bubble").className = "bubble ok";
+  $("say").innerHTML = "<b>" + esc(S.lang === "zh" ? "漂亮！" : "Nice!") + "</b> " + esc(T(st.ok));
+  $("sub").className = "sub"; $("sub").innerHTML = cont();
+}
+function advance() {
+  const st = STEPS[G.step];
+  G.step++;
+  store.set("step", G.step);
+  const nx = STEPS[G.step];
+  if (!nx) return graduate();
+  if (nx.lv !== st.lv) return levelDone(st.lv);
+  openStep();
+}
+function miss(action) {
+  G.misses++;
+  const st = STEPS[G.step];
+  const b = $("bubble"); b.classList.remove("no"); void b.offsetWidth; b.classList.add("no");
+  const want = st.expect ? st.expect[0] : "cross";
+  let text = T(nameOf(action)) + (S.lang === "zh" ? " 是“" + T(doesOf(action)) + "”。要按的是发光的 " : " is “" + T(doesOf(action)) + "”. Press the glowing ") + T(nameOf(want)) + (S.lang === "zh" ? "。" : ".");
+  if (G.misses >= 2 && want.includes("+")) {
+    const [a, c] = want.split("+").map((p) => T(NAMES[p]));
+    text += S.lang === "zh" ? " 先按住 " + a + " 不放，再按 " + c + "；用鼠标就先点 " + a + "，再点 " + c + "。" : " Hold " + a + ", then press " + c + "; with the mouse, click " + a + " first, then " + c + ".";
+  } else if (G.misses >= 2 && want.endsWith("_hold")) {
+    text += S.lang === "zh" ? " 要按住大约一秒再松手。" : " Keep it held for about a second.";
+  } else if (G.misses >= 2 && want.startsWith("wheel")) {
+    text += S.lang === "zh" ? " △ 要一直按着，推完摇杆再松开 △。" : " Keep △ held while you push the stick, then release △.";
+  }
+  $("sub").className = "sub bad"; $("sub").textContent = text;
+}
+
+function overlay(html) { const o = $("overlay"); o.innerHTML = html; o.hidden = false; }
+function hideOverlay() { $("overlay").hidden = true; }
+function levelDone(lv) {
+  G.phase = "card"; G.cardLv = lv;
+  spotlight([]);
+  renderProgress();
+  const lev = LEVELS[lv];
+  overlay('<div class="card-l"><div class="eyebrow">' + esc(S.lang === "zh" ? "第 " + (lv + 1) + " 关完成" : "Level " + (lv + 1) + " complete") + "</div><h2>" + esc(T(lev)) + " ✓</h2>" +
+    '<div class="learned">' + lev.learned.map((x) => "<span>" + esc(T(x)) + "</span>").join("") + "</div>" +
+    '<div class="actions"><button class="btn primary" type="button" id="ov-next">' + esc(S.lang === "zh" ? "下一关" : "Next level") + ' <span class="sym">✕</span></button></div></div>');
+  $("ov-next").addEventListener("click", () => openStep());
+  coach(esc(S.lang === "zh" ? "这一关过了！下一关：" + T(LEVELS[lv + 1]) + "。" : "Level cleared! Next up: " + T(LEVELS[lv + 1]) + "."), cont());
+}
+function graduate() {
+  G.phase = "grad";
+  spotlight([]);
+  setLight("done");
+  renderProgress();
+  const sw = ["thinking", "tool", "permission", "waiting", "done", "error"].map((n) =>
+    '<div><i style="background:rgb(' + LIGHTS[n].rgb.join(",") + ')"></i>' + esc(T(LIGHTS[n])) + "</div>").join("");
+  const best = store.get("best", null);
+  overlay('<div class="card-l"><div class="eyebrow">' + esc(S.lang === "zh" ? "训练完成" : "Training complete") + "</div><h2>" + esc(S.lang === "zh" ? "你毕业了 🎓" : "You graduated 🎓") + "</h2>" +
+    '<div class="swatches">' + sw + "</div>" +
+    '<div class="actions"><button class="btn primary" type="button" id="ov-rush">' + esc(S.lang === "zh" ? "限时挑战" : "Timed challenge") + ' <span class="sym">✕</span></button>' +
+    '<button class="btn" type="button" id="ov-again">' + esc(S.lang === "zh" ? "从头再来" : "Start over") + "</button></div>" +
+    (best != null ? '<div class="sub">' + esc((S.lang === "zh" ? "挑战最高分 " : "Best challenge score ") + best) + "</div>" : "") + "</div>");
+  $("ov-rush").addEventListener("click", startRush);
+  $("ov-again").addEventListener("click", restart);
+  coach(esc(S.lang === "zh" ? "常用的都会了！想试试手速？限时挑战：8 道题，不再告诉你按哪个键。" : "You know the essentials! Test your speed: 8 timed scenarios, no glowing hints."), "");
+}
+
+// ------------------------------------------------------------------ timed challenge
+function startRush() {
+  hideOverlay();
+  const pool = STEPS.filter((s) => s.q);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  G.rush = { list: pool.slice(0, 8), i: 0, score: 0, left: 0 };
+  rushOpen();
+}
+function rushOpen() {
+  G.phase = "rush"; wheelSel = null;
+  const st = G.rush.list[G.rush.i];
+  G.lines = []; G.fresh = 0; if (st.show) pushLines(st.show);
+  G.input = st.input || "";
+  setLight(st.light); if (st.rumble) rumble(st.light === "error" ? "error" : "attention");
+  renderLog(st);
+  spotlight([]);
+  $("lvl").textContent = (S.lang === "zh" ? "挑战 " : "Challenge ") + (G.rush.i + 1) + "/" + G.rush.list.length + (S.lang === "zh" ? " · 得分 " : " · score ") + G.rush.score;
+  coach(esc(T(st.q)), "");
+  $("timer").hidden = false;
+  startTimer();
+}
+function rushAnswer(action) {
+  const st = G.rush.list[G.rush.i];
+  if (st.expect.includes(action)) {
+    stopTimer();
+    G.rush.score += 10 + Math.round(G.rush.left / 1000);
+    $("bubble").className = "bubble ok";
+    $("say").innerHTML = "<b>" + esc(S.lang === "zh" ? "对！" : "Yes!") + "</b> " + esc(T(nameOf(action)) + " · " + T(doesOf(action)));
+    G.phase = "rushwait";
+    setTimeout(rushNext, 900);
+  } else {
+    G.rush.score = Math.max(0, G.rush.score - 2);
+    const b = $("bubble"); b.classList.remove("no"); void b.offsetWidth; b.classList.add("no");
+    $("sub").className = "sub bad"; $("sub").textContent = T(nameOf(action)) + " · " + T(doesOf(action)) + " (-2)";
+  }
+}
+function rushNext() { if (!G.rush) return; G.rush.i++; if (G.rush.i >= G.rush.list.length) return rushEnd(); rushOpen(); }
+let timerId = null;
+function startTimer() {
+  stopTimer();
+  const total = 9000, t0 = performance.now();
+  const tick = () => {
+    if (!G.rush) return;
+    G.rush.left = Math.max(0, total - (performance.now() - t0));
+    $("timer-bar").style.width = (100 * G.rush.left / total) + "%";
+    if (G.rush.left <= 0) {
+      stopTimer();
+      const st = G.rush.list[G.rush.i];
+      $("sub").className = "sub bad";
+      $("sub").textContent = (S.lang === "zh" ? "时间到！答案是 " : "Time's up! It was ") + T(nameOf(st.expect[0]));
+      G.phase = "rushwait"; setTimeout(rushNext, 1600); return;
+    }
+    timerId = requestAnimationFrame(tick);
+  };
+  timerId = requestAnimationFrame(tick);
+}
+function stopTimer() { if (timerId) cancelAnimationFrame(timerId); timerId = null; }
+function rushEnd() {
+  stopTimer(); $("timer").hidden = true;
+  G.lastScore = G.rush.score; G.rush = null; G.phase = "rushend";
+  const best = Math.max(G.lastScore, store.get("best", 0)); store.set("best", best);
+  setLight(G.lastScore >= 120 ? "done" : "idle");
+  rushEndView(best);
+}
+function rushEndView(best) {
+  $("lvl").textContent = "";
+  overlay('<div class="card-l"><div class="eyebrow">' + esc(S.lang === "zh" ? "挑战结束" : "Challenge over") + '</div><div class="score">' + G.lastScore + "</div>" +
+    '<div class="sub">' + esc((S.lang === "zh" ? "最高 " : "Best ") + best + (S.lang === "zh" ? " · 满分约 160" : " · max about 160")) + "</div>" +
+    '<div class="actions"><button class="btn primary" type="button" id="ov-rush">' + esc(S.lang === "zh" ? "再来一次" : "Play again") + ' <span class="sym">✕</span></button>' +
+    '<button class="btn" type="button" id="ov-again">' + esc(S.lang === "zh" ? "从头再来" : "Start over") + "</button></div></div>");
+  $("ov-rush").addEventListener("click", startRush);
+  $("ov-again").addEventListener("click", restart);
+  coach(esc(S.lang === "zh" ? "每题 9 秒，越快分越高，按错扣 2 分。" : "9 s per scenario; faster scores more, a wrong press costs 2."), "");
+}
+function restart() {
+  stopTimer(); $("timer").hidden = true;
+  G.rush = null; G.step = 0; G.lines = []; G.fresh = 0; G.input = ""; store.set("step", 0);
+  openStep();
+}
+
+function handleAction(action) {
+  if (G.phase === "card") { if (action === "cross") openStep(); return; }
+  if (G.phase === "grad" || G.phase === "rushend") { if (action === "cross") startRush(); return; }
+  if (G.phase === "rush") return rushAnswer(action);
+  if (G.phase === "rushwait") return;
+  if (G.phase === "after") { if (action === "cross") advance(); return; }
+  const st = STEPS[G.step];
+  if (!st) return;
+  if ((st.expect || ["cross"]).includes(action)) return succeed(st, action);
+  miss(action);
+}
+
+// ------------------------------------------------------------------ input: mouse, keyboard, real controller
+const MODS = ["ps", "r1", "l1"];
+const HOLDABLE = { ps: true, create: true };
+const HOLD_MS = 600;
+const held = new Map();
+let latched = null, wheelStart = null;
+
+function visual(name, on) {
+  const el = name === "l3" || name.startsWith("stick_") ? document.querySelector('[data-stick="l"]')
+    : name === "r3" || name.startsWith("rstick_") ? document.querySelector('[data-stick="r"]')
+    : document.querySelector('[data-btn="' + name + '"]');
+  el && el.classList.toggle("down", on);
+}
+function down(name, src) {
+  if (held.has(name)) return;
+  held.set(name, { t: performance.now(), used: false, src });
+  visual(name, true);
+  if (name === "triangle") { wheelSel = null; updateWheel(); }
+  if (MODS.includes(name)) return;           // decided on release, or by the next key
+  const mod = MODS.find((m) => m !== name && held.has(m)) || latched;
+  if (mod) {
+    if (held.has(mod)) held.get(mod).used = true;
+    if (latched === mod) setLatched(null);
+    held.get(name).used = true;
+    return handleAction(mod + "+" + name);
+  }
+  if (name === "triangle" || HOLDABLE[name]) return; // decided on release
+  handleAction(name);
+}
+function up(name) {
+  const h = held.get(name);
+  if (!h) return;
+  held.delete(name);
+  visual(name, false);
+  const dur = performance.now() - h.t;
+  if (h.used) return;
+  if (name === "triangle") {
+    if (wheelSel != null) { const n = wheelSel; wheelSel = null; updateWheel(); return handleAction("wheel_pick:" + n); }
+    return handleAction("triangle");
+  }
+  if (MODS.includes(name)) {
+    if (dur >= HOLD_MS && HOLDABLE[name]) return handleAction(name + "_hold");
+    if (h.src === "pointer") {                // a click holds the modifier until the next key
+      if (latched === name) { setLatched(null); return handleAction(name); }
+      return setLatched(name);
+    }
+    return handleAction(name);
+  }
+  if (HOLDABLE[name]) return handleAction(dur >= HOLD_MS ? name + "_hold" : name);
+}
+function setLatched(m) {
+  if (latched) { const el = document.querySelector('[data-btn="' + latched + '"]'); el && el.classList.remove("latched"); }
+  latched = m;
+  if (m) { const el = document.querySelector('[data-btn="' + m + '"]'); el && el.classList.add("latched"); }
+}
+function wheelPick(sector) { if (!held.has("triangle")) return; wheelSel = sector; updateWheel(); }
+const SECTOR = (dx, dy) => Math.round(((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360) / 45) % 8;
+
+const svg = $("ctl");
+function svgPoint(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+let pointerName = null;
+svg.addEventListener("pointerdown", (e) => {
+  const g = e.target.closest(".hit");
+  if (!g) return;
+  e.preventDefault();
+  let name = g.dataset.btn;
+  if (g.dataset.stick) {
+    const c = g.querySelector("circle.k"), p = svgPoint(e);
+    const dx = p.x - +c.getAttribute("cx"), dy = p.y - +c.getAttribute("cy");
+    if (held.has("triangle")) { wheelPick(SECTOR(dx, dy)); return; }
+    const pre = g.dataset.stick === "l" ? "stick_" : "rstick_";
+    if (Math.hypot(dx, dy) < 15) name = g.dataset.stick === "l" ? "l3" : "r3";
+    else if (Math.abs(dx) > Math.abs(dy)) name = pre + (dx > 0 ? "right" : "left");
+    else name = pre + (dy > 0 ? "down" : "up");
+  }
+  pointerName = name;
+  if (name === "triangle") wheelStart = { x: e.clientX, y: e.clientY };
+  down(name, "pointer");
+});
+window.addEventListener("pointermove", (e) => {
+  if (pointerName !== "triangle" || !wheelStart) return;
+  const dx = e.clientX - wheelStart.x, dy = e.clientY - wheelStart.y;
+  if (Math.hypot(dx, dy) > 28) wheelPick(SECTOR(dx, dy));
+});
+function pointerEnd() { if (pointerName) { const n = pointerName; pointerName = null; wheelStart = null; up(n); } }
+window.addEventListener("pointerup", pointerEnd);
+window.addEventListener("pointercancel", pointerEnd);
+
+const KEYMAP = { k: "cross", l: "circle", j: "square", i: "triangle", q: "l1", e: "r1", z: "l2_full", c: "r2_full",
+  p: "ps", m: "mic", r: "r3", f: "l3", n: "create", b: "options", t: "touchpad", enter: "cross", " ": "cross" };
+const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+const keyHeld = new Map();
+window.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target && e.target.tagName === "BUTTON" && (e.key === "Enter" || e.key === " ")) return; // let buttons click
+  let name = KEYMAP[e.key.toLowerCase()];
+  if (ARROWS[e.key]) {
+    const d = ARROWS[e.key];
+    if (held.has("triangle")) { e.preventDefault(); wheelPick({ up: 0, right: 2, down: 4, left: 6 }[d]); return; }
+    name = e.shiftKey ? "rstick_" + d : d;
+  }
+  if (!name) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  keyHeld.set(e.code, name);
+  down(name, "key");
+});
+window.addEventListener("keyup", (e) => { const n = keyHeld.get(e.code); if (!n) return; keyHeld.delete(e.code); up(n); });
+
+// Gamepad API, standard mapping (index 18 = mic is not standard; used when present)
+const GP_BTNS = ["cross", "circle", "square", "triangle", "l1", "r1", "l2_full", "r2_full", "create", "options", "l3", "r3", "up", "down", "left", "right", "ps", "touchpad", "mic"];
+let gpPrev = {}, gpName = "", gpStick = {}, gpIndex = -1;
+function livePad() { try { return gpIndex >= 0 ? navigator.getGamepads()[gpIndex] : null; } catch { return null; } }
+function pollPad() {
+  let pads = [];
+  try { pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : []; } catch { pads = []; }
+  const gp = DS.on ? null : pads[0];
+  if (!gp) { gpIndex = -1; if (gpName) { gpName = ""; padText(); } }
+  else {
+    gpIndex = gp.index;
+    if (gpName !== gp.id) { gpName = gp.id; padText(); if (G.phase === "ask" && STEPS[G.step]) openStep(false); }
+    gp.buttons.forEach((b, i) => {
+      const name = GP_BTNS[i]; if (!name) return;
+      const on = name.endsWith("_full") ? b.value > 0.92 : b.pressed;
+      if (on && !gpPrev[i]) down(name, "pad");
+      if (!on && gpPrev[i]) up(name);
+      gpPrev[i] = on;
+    });
+    for (const [pre, x, y] of [["stick_", gp.axes[0], gp.axes[1]], ["rstick_", gp.axes[2], gp.axes[3]]]) {
+      if (x === undefined) continue;
+      const mag = Math.hypot(x, y);
+      if (held.has("triangle")) { if (mag > 0.6) wheelPick(SECTOR(x, y)); gpStick[pre] = null; continue; }
+      const dir = mag > 0.6 ? (Math.abs(x) > Math.abs(y) ? (x > 0 ? "right" : "left") : (y > 0 ? "down" : "up")) : null;
+      if (dir !== gpStick[pre]) { if (gpStick[pre]) up(pre + gpStick[pre]); if (dir) down(pre + dir, "pad"); gpStick[pre] = dir; }
+    }
+  }
+  requestAnimationFrame(pollPad);
+}
+function padText() {
+  const zh = S.lang === "zh";
+  $("pad-dot").classList.toggle("on", DS.on ? DS.pad : !!gpName);
+  $("pad-text").textContent = DS.on
+    ? (DS.pad ? (zh ? "真手柄已连接 · 练习模式（按键不会发给 Claude）" : "Controller connected · practice mode (nothing reaches Claude)")
+              : (zh ? "练习模式已开，但手柄没接上（插上 USB 或用蓝牙连上）" : "Practice mode on, but no controller (plug it in or pair it)"))
+    : DS.tried ? (zh ? "和 dsagent 断开了，正在重连…" : "Lost dsagent, reconnecting…")
+    : gpName ? (zh ? "真手柄已连接" : "Controller connected")
+    : (zh ? "没检测到手柄（按一下手柄上的键试试）" : "No controller seen (press a button on it)");
+}
+
+// The page served by the dsagent daemon (`dsagent tutorial`): buttons arrive as Server-Sent Events
+// from the daemon, which keeps the controller to itself (macOS never sees PS; mic works too) and is
+// in practice mode while this page is open, so nothing reaches Claude.
+const DS = { on: false, pad: false, tried: false };
+const DS_LOCAL = location.protocol === "http:" && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+function dsPost(path, body) {
+  if (!DS.on) return;
+  try { fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {}); } catch {}
+}
+function dsConnect() {
+  if (!DS_LOCAL || typeof EventSource === "undefined") return;
+  const es = new EventSource("/events");
+  es.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.op === "hello") {
+      const was = DS.on;
+      DS.on = true; DS.tried = true; DS.pad = !!m.controller; padText();
+      setLight(G.light);
+      if (!was && G.phase === "ask" && STEPS[G.step]) openStep(false);
+    } else if (m.op === "controller") { DS.pad = !!m.controller; padText(); }
+    else if (m.op === "raw") {
+      DS.pad = true;
+      const stick = /^r?stick_(up|down|left|right)$/.test(m.name);
+      if (!stick && !GP_BTNS.includes(m.name)) return;               // swipes etc. are not taught
+      if (stick && held.has("triangle")) return;                     // the stick steers the wheel
+      if (m.down) down(m.name, "pad"); else up(m.name);
+    } else if (m.op === "control" && /^wheel:\d$/.test(m.name)) wheelPick(+m.name.slice(6));
+  };
+  es.onerror = () => {   // the daemon restarted or stopped: EventSource retries by itself
+    if (!DS.on) return;
+    DS.on = false; held.forEach((_, n) => visual(n, false)); held.clear(); padText();
+  };
+}
+window.addEventListener("gamepaddisconnected", () => { gpName = ""; padText(); });
+
+// ------------------------------------------------------------------ chrome, language, boot
+function renderChrome() {
+  document.documentElement.lang = S.lang === "zh" ? "zh-CN" : "en";
+  $("lang-zh").setAttribute("aria-pressed", String(S.lang === "zh"));
+  $("lang-en").setAttribute("aria-pressed", String(S.lang === "en"));
+  $("brand").textContent = S.lang === "zh" ? "手柄驾校" : "Pad School";
+  $("keys-btn").textContent = S.lang === "zh" ? "键盘怎么按" : "Keyboard keys";
+  $("restart-btn").textContent = S.lang === "zh" ? "从头开始" : "Start over";
+  const items = S.lang === "zh"
+    ? ["K ✕ · L ○ · J □ · I △（和手柄一样排成菱形）", "Q L1 · E R1 · Z L2 · C R2 · P PS · M 麦克风", "方向键 = 十字键 · Shift+方向键 = 右摇杆 · R = R3", "N Create · B Options · T 触摸板 · 回车 / 空格 = ✕", "组合键：按住 P / E / Q 再按另一个键 · 长按 P 或 N 约一秒", "提示轮盘：按住 I，按方向键，再松开 I"]
+    : ["K ✕ · L ○ · J □ · I △ (a diamond, like the pad)", "Q L1 · E R1 · Z L2 · C R2 · P PS · M mic", "Arrows = d-pad · Shift+arrows = right stick · R = R3", "N Create · B Options · T touchpad · Enter / Space = ✕", "Combos: hold P / E / Q, then another key · hold P or N about a second", "Prompt wheel: hold I, press an arrow, release I"];
+  $("marquee").textContent = S.lang === "zh"
+    ? "★ 欢迎光临手柄驾校 ★ 用 PS5 手柄开 Claude ★ ✕ 确认 · ○ 取消 · △ 继续 · □ 清空输入 ★ 光条橙色闪烁 = 等你批准 · 绿色 = 做完了 ★ 本站最佳浏览：DualSense + 1024×768 ★ 练习模式中，按键不会发给 Claude ★"
+    : "★ Welcome to Pad School ★ Drive Claude with a PS5 controller ★ ✕ confirm · ○ cancel · △ continue · □ clear input ★ Blinking orange light = needs your approval · green = done ★ Best viewed with a DualSense at 1024×768 ★ Practice mode: nothing reaches Claude ★";
+  $("visits-label").textContent = S.lang === "zh" ? "你来驾校的次数" : "Your visits";
+  const v = String(Math.min(999999, store.get("visits", 1))).padStart(6, "0");
+  $("visits").innerHTML = [...v].map((d) => "<i>" + d + "</i>").join("");
+  const ul = $("keys-list"); ul.textContent = "";
+  items.forEach((t) => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+  padText();
+}
+function setLang(l) {
+  S.lang = l; store.set("lang", l);
+  renderChrome();
+  if (G.phase === "card") return levelDone(G.cardLv);
+  if (G.phase === "grad") return graduate();
+  if (G.phase === "rushend") return rushEndView(store.get("best", G.lastScore));
+  if (G.phase === "rush" || G.phase === "rushwait") { const st = G.rush.list[G.rush.i]; setLight(G.light); renderLog(st); if (G.phase === "rush") coach(esc(T(st.q)), ""); return; }
+  const st = STEPS[G.step];
+  if (G.phase === "after") { setLight(G.light); renderLog(null); renderProgress(); showOk(st); return; }
+  openStep(false);
+}
+$("lang-zh").addEventListener("click", () => setLang("zh"));
+$("lang-en").addEventListener("click", () => setLang("en"));
+$("keys-btn").addEventListener("click", () => { $("keys").hidden = !$("keys").hidden; });
+$("restart-btn").addEventListener("click", restart);
+
+// 2003 called: a sparkle trail behind the mouse.
+function sparkleTrail() {
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const colors = ["var(--gold)", "var(--hot)", "var(--cyan)", "#fff"];
+  let last = 0, n = 0;
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch" || e.timeStamp - last < 45) return;
+    last = e.timeStamp;
+    const t = document.createElement("span");
+    t.className = "trail";
+    t.style.left = e.clientX + "px"; t.style.top = e.clientY + "px";
+    t.style.background = colors[n++ % colors.length];
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 750);
+  }, { passive: true });
+}
+
+function start() {
+  store.set("visits", store.get("visits", 0) + 1);
+  renderChrome();
+  sparkleTrail();
+  for (let i = 0; i < Math.min(G.step, STEPS.length); i++) {   // replay the story so far
+    const s = STEPS[i];
+    if (s.show) pushLines(s.show);
+    if (s.after) pushLines(s.after);
+  }
+  G.fresh = 0;
+  if (G.step >= STEPS.length) graduate(); else openStep();
+  requestAnimationFrame(pollPad);
+  dsConnect();
+}
+start();
+})();
+</script>
