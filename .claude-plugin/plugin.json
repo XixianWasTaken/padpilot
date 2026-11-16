@@ -1,6 +1,6 @@
 {
-  "name": "dualsense",
-  "version": "0.3.0",
+  "name": "padpilot",
+  "version": "0.4.0",
   "description": "Drive Claude Code, Codex CLI and the Claude desktop app with a PS5 DualSense controller: lightbar, rumble, adaptive triggers and the controller speaker show what the agent is doing; buttons approve, interrupt, retry, pick next-step replies and navigate.",
   "author": {
     "name": "XixianWasTaken"

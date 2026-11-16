@@ -1,9 +1,9 @@
-"""Interactive check: real `codex` TUI under `dsagent run`, driven through the daemon."""
+"""Interactive check: real `codex` TUI under `padpilot run`, driven through the daemon."""
 import json, os, pty, re, select, subprocess, sys, time, fcntl, termios, struct
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DS = os.path.join(ROOT, "bin", "dsagent")
-WORK = "/tmp/dsagent-e2e"
+DS = os.path.join(ROOT, "bin", "padpilot")
+WORK = "/tmp/padpilot-e2e"
 L = DS
 ov = []
 for ev in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]:

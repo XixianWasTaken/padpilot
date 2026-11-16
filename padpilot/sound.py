@@ -10,7 +10,7 @@ Closing the audio stream makes the controller give a short noise (it sounds like
 daemon switches the speaker on only while a cue plays and the stream stays open (silent) a while
 longer, to close after the speaker is off again.
 
-Playing runs in a child process (`python -m dsagent.sound play ...`), so a CoreAudio problem
+Playing runs in a child process (`python -m padpilot.sound play ...`), so a CoreAudio problem
 cannot take the daemon down.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ class Speaker:
         pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         env = dict(os.environ)
         env["PYTHONPATH"] = pkg_root + os.pathsep + env.get("PYTHONPATH", "")
-        args = [self.python, "-m", "dsagent.sound", "play", sound, "--device", device,
+        args = [self.python, "-m", "padpilot.sound", "play", sound, "--device", device,
                 "--channel", str(channel), "--channels", str(channels), "--lead", str(lead_ms),
                 "--gain", str(gain), "--tail", str(tail_ms)]
         try:
@@ -209,7 +209,7 @@ def play_pcm(pcm: bytes, device: str, channels: int) -> int:
 
 def main(argv: List[str]) -> int:
     import argparse
-    ap = argparse.ArgumentParser(prog="python -m dsagent.sound")
+    ap = argparse.ArgumentParser(prog="python -m padpilot.sound")
     ap.add_argument("cmd", choices=["play"])
     ap.add_argument("sound")
     ap.add_argument("--device", default=DEVICE)
@@ -223,7 +223,7 @@ def main(argv: List[str]) -> int:
     if path is None:
         print(f"no such sound: {a.sound}", file=sys.stderr)
         return 1
-    home = os.environ.get("DSAGENT_HOME") or os.path.join(os.path.expanduser("~"), ".dualsense-agent")
+    home = os.environ.get("PADPILOT_HOME") or os.path.join(os.path.expanduser("~"), ".padpilot")
     mono = load(path, os.path.join(home, "sounds"))
     rc = play_pcm(interleave(mono, a.channel, a.channels, a.lead, a.gain, a.tail), a.device, a.channels)
     if rc:

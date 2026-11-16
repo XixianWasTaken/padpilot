@@ -1,5 +1,5 @@
 """The daemon owns the controller. It turns agent events into light/rumble/trigger feedback and
-forwards controller input to the focused `dsagent run` wrapper as keystrokes, or (macOS, no
+forwards controller input to the focused `padpilot run` wrapper as keystrokes, or (macOS, no
 wrapper attached) to an allowed frontmost desktop app as real key presses.
 
 Protocol: newline-delimited JSON over a Unix socket (see client.py).
@@ -34,7 +34,7 @@ from .effects import Flash, RumblePlayer, light_at, mix, scale
 from .hook import is_choice_tool
 from .keys import encode_key, split_action, to_items
 
-log = logging.getLogger("dsagent")
+log = logging.getLogger("padpilot")
 
 FRAME_S = 1 / 30.0
 IDLE_FRAME_S = 1 / 15.0
@@ -80,8 +80,8 @@ class Session:
 
 
 class Target:
-    """A connected `dsagent run` wrapper that can receive keystrokes."""
-    practice_mode = False  # a `dsagent watch --practice` or the tutorial page
+    """A connected `padpilot run` wrapper that can receive keystrokes."""
+    practice_mode = False  # a `padpilot watch --practice` or the tutorial page
 
     def _encode(self, msg: Optional[dict]) -> bytes:
         return (json.dumps(msg) + "\n").encode()
@@ -177,7 +177,7 @@ class Daemon:
         self.last_mic_poll = -1e9
         self.last_low_battery = -1e9
         self.retry_armed_until = 0.0
-        self.practice: Optional[Target] = None  # `dsagent watch --practice`: report, don't send
+        self.practice: Optional[Target] = None  # `padpilot watch --practice`: report, don't send
         self.preview: Optional[tuple] = None    # (light spec, since): the tutorial page shows a state
         self.ptt_sent: Dict[str, bool] = {}  # push-to-talk control -> its press was delivered
 
@@ -204,7 +204,7 @@ class Daemon:
             return False
         if not trusted():
             if not self.desktop_warned:
-                log.warning("desktop keys: no Accessibility permission (run `dsagent desktop`)")
+                log.warning("desktop keys: no Accessibility permission (run `padpilot desktop`)")
                 self.desktop_warned = True
             return False
         if self.desktop_q is None:
@@ -1192,7 +1192,7 @@ def _acquire_singleton():
 def run_daemon(foreground: bool = False) -> int:
     lock_fd = _acquire_singleton()
     if lock_fd is None:
-        print("dsagent daemon already running")
+        print("padpilot daemon already running")
         return 0
     handlers = [logging.StreamHandler()] if foreground else []
     try:
@@ -1206,7 +1206,7 @@ def run_daemon(foreground: bool = False) -> int:
     try:
         import hid  # type: ignore
     except Exception as e:
-        log.error("python 'hidapi' module missing (%s); run `dsagent setup`", e)
+        log.error("python 'hidapi' module missing (%s); run `padpilot setup`", e)
         hid = None
     d = Daemon(C.load_config(), hid)
 
@@ -1246,7 +1246,7 @@ def run_daemon(foreground: bool = False) -> int:
                 conn, _ = srv.accept()
             except socket.timeout:
                 with d.lock:
-                    # A `dsagent watch` (practice mode) keeps the daemon alive too.
+                    # A `padpilot watch` (practice mode) keeps the daemon alive too.
                     idle = not d.targets and not d.watchers and time.monotonic() - d.last_activity > idle_limit
                 if idle_limit > 0 and idle:
                     log.info("idle for %.0f min, exiting", idle_limit / 60)

@@ -9,26 +9,26 @@ import socket
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("DSAGENT_HOME", tempfile.mkdtemp(prefix="dsagent-test-"))
+os.environ.setdefault("PADPILOT_HOME", tempfile.mkdtemp(prefix="padpilot-test-"))
 # Never read the real ~/.claude (transcripts, keybindings).
-os.environ["CLAUDE_CONFIG_DIR"] = tempfile.mkdtemp(prefix="dsagent-claude-")
+os.environ["CLAUDE_CONFIG_DIR"] = tempfile.mkdtemp(prefix="padpilot-claude-")
 
-from dsagent import config as C  # noqa: E402
-from dsagent.controls import ControlTracker  # noqa: E402
-from dsagent.daemon import Daemon, Target  # noqa: E402
-from dsagent.dualsense import (PLAYER_PATTERNS, InputState, OutputState, build_bt_report,  # noqa: E402
+from padpilot import config as C  # noqa: E402
+from padpilot.controls import ControlTracker  # noqa: E402
+from padpilot.daemon import Daemon, Target  # noqa: E402
+from padpilot.dualsense import (PLAYER_PATTERNS, InputState, OutputState, build_bt_report,  # noqa: E402
                                build_usb_report, parse_input, trigger_feedback, trigger_weapon)
-from dsagent.effects import RumblePlayer, light_at  # noqa: E402
-from dsagent.keys import encode_key, split_action, to_items  # noqa: E402
-from dsagent.macos import CMD, CTRL, SHIFT, key_event  # noqa: E402
-from dsagent.bindings import ACTIONS, Resolver, normalize_keystroke, parse_accelerator  # noqa: E402
-from dsagent.daemon import _can  # noqa: E402
+from padpilot.effects import RumblePlayer, light_at  # noqa: E402
+from padpilot.keys import encode_key, split_action, to_items  # noqa: E402
+from padpilot.macos import CMD, CTRL, SHIFT, key_event  # noqa: E402
+from padpilot.bindings import ACTIONS, Resolver, normalize_keystroke, parse_accelerator  # noqa: E402
+from padpilot.daemon import _can  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 
 def make_resolver(kb=None, desktop=None):
     """Resolver on temp files (never the real user's settings)."""
-    tmp = Path(tempfile.mkdtemp(prefix="dsagent-kb-"))
+    tmp = Path(tempfile.mkdtemp(prefix="padpilot-kb-"))
     if kb is not None:
         (tmp / "keybindings.json").write_text(kb if isinstance(kb, str) else json.dumps(kb))
     if desktop is not None:
@@ -346,7 +346,7 @@ class DaemonLogicTest(unittest.TestCase):
         self.assertTrue(self.d._want_shared())
 
     def test_set_shared_open_without_the_c_switch_is_harmless(self):
-        from dsagent.dualsense import set_shared_open
+        from padpilot.dualsense import set_shared_open
         class NoLib: __file__ = "/nonexistent/hid.so"
         self.assertFalse(set_shared_open(NoLib, True))
 
@@ -742,7 +742,7 @@ class InteractionTest(unittest.TestCase):
         self.posted = []
         fake = (lambda: "com.anthropic.claudefordesktop", lambda prompt=False: True,
                 lambda items, gap: self.posted.append(items))
-        self.tmp = Path(tempfile.mkdtemp(prefix="dsagent-set-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="padpilot-set-"))
         self.d = Daemon(C.load_config(), None, desktop=fake, mic_probe=lambda: False,
                         resolver=make_resolver(), settings_path=self.tmp / "config.json")
 
@@ -1026,7 +1026,7 @@ class InteractionTest(unittest.TestCase):
 
 class HookTest(unittest.TestCase):
     def run_hook(self, payload):
-        from dsagent import hook
+        from padpilot import hook
         sent = []
         orig = (hook.client.request, hook.client.start_daemon)
         hook.client.request = lambda msg, timeout=0: sent.append(msg)
@@ -1052,7 +1052,7 @@ class HookTest(unittest.TestCase):
 
 class IOHelpersTest(unittest.TestCase):
     def test_typed_text_chunks_count_utf16_units(self):
-        from dsagent.macos import utf16_chunks
+        from padpilot.macos import utf16_chunks
         s = "\U0001F600" * 20 + "ab"
         chunks = utf16_chunks(s)
         self.assertEqual("".join(chunks), s)
@@ -1060,7 +1060,7 @@ class IOHelpersTest(unittest.TestCase):
         self.assertEqual(utf16_chunks("x" * 40), ["x" * 16, "x" * 16, "x" * 8])
 
     def test_transcript_tail_sees_past_one_long_line(self):
-        from dsagent import transcript as T
+        from padpilot import transcript as T
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "t.jsonl")
             with open(p, "w") as f:
@@ -1070,7 +1070,7 @@ class IOHelpersTest(unittest.TestCase):
             self.assertEqual(T.last_prompt(p), "earlier prompt")
 
     def test_transcript_odd_message_shapes_are_skipped(self):
-        from dsagent import transcript as T
+        from padpilot import transcript as T
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "t.jsonl")
             with open(p, "w") as f:
@@ -1083,7 +1083,7 @@ class IOHelpersTest(unittest.TestCase):
             self.assertEqual(T.context_tokens(p), (None, None))
 
     def test_terminal_modes_split_across_reads(self):
-        from dsagent.wrapper import Wrapper
+        from padpilot.wrapper import Wrapper
         w = Wrapper(["claude"])
         w._track_modes(b"hello\x1b[?")
         w._track_modes(b"1h world")
@@ -1107,7 +1107,7 @@ class TutorialPageTest(unittest.TestCase):
 
     def setUp(self):
         import http.client
-        from dsagent import web
+        from padpilot import web
         self.http = http.client
         self.d = Daemon(C.load_config(), None, desktop=NO_DESKTOP, mic_probe=lambda: False,
                         resolver=make_resolver())
@@ -1167,3 +1167,33 @@ class TutorialPageTest(unittest.TestCase):
         self.assertIsNone(self.d.practice)  # closing the page ends practice
         self.assertIsNone(self.d.preview)
         self.assertEqual(self.d.watchers, [])
+
+
+class RenameMigrationTest(unittest.TestCase):
+    """0.4 renamed dualsense-agent to padpilot: the old home moves once, old Codex hooks are still ours."""
+
+    def test_old_home_moves_to_the_new_one(self):
+        from padpilot import config
+        tmp = Path(tempfile.mkdtemp())
+        old, new = tmp / ".dualsense-agent", tmp / ".padpilot"
+        old.mkdir()
+        (old / "config.json").write_text('{"brightness": 0.5}')
+        saved = (config.HOME, config.OLD_HOME, os.environ.pop("PADPILOT_HOME", None))
+        try:
+            config.HOME, config.OLD_HOME = new, old
+            config._migrate_old_home()
+            self.assertFalse(old.exists())
+            self.assertEqual((new / "config.json").read_text(), '{"brightness": 0.5}')
+            old.mkdir()                       # a second run leaves both alone
+            config._migrate_old_home()
+            self.assertTrue(old.exists())
+        finally:
+            config.HOME, config.OLD_HOME = saved[0], saved[1]
+            if saved[2] is not None:
+                os.environ["PADPILOT_HOME"] = saved[2]
+
+    def test_codex_hooks_from_before_the_rename_are_recognised(self):
+        from padpilot.cli import _is_ours
+        self.assertTrue(_is_ours({"hooks": [{"command": '"/x/dualsense-agent/bin/dsagent" hook codex'}]}))
+        self.assertTrue(_is_ours({"hooks": [{"command": '"/x/padpilot/bin/padpilot" hook codex'}]}))
+        self.assertFalse(_is_ours({"hooks": [{"command": "other-tool hook codex"}]}))

@@ -61,7 +61,7 @@ class ControlTracker:
         self.wheel: Optional[int] = None       # selected sector while the wheel button is held
         self.touch_start = None
         self.touch_last = None
-        self.raw: List[tuple] = []             # (name, pressed, held_s) transitions, for `dsagent watch`
+        self.raw: List[tuple] = []             # (name, pressed, held_s) transitions, for `padpilot watch`
 
     @property
     def modifiers(self) -> List[str]:

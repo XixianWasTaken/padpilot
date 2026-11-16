@@ -18,7 +18,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 
-log = logging.getLogger("dsagent")
+log = logging.getLogger("padpilot")
 
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tutorial.html")
 HEARTBEAT_S = 1.0
@@ -42,7 +42,7 @@ def _make_handler(d, port: int):
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
-        server_version = "dsagent"
+        server_version = "padpilot"
 
         def log_message(self, fmt, *args):  # the daemon log has enough
             pass

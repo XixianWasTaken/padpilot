@@ -1,4 +1,4 @@
-"""Command line interface: `dsagent <command>`."""
+"""Command line interface: `padpilot <command>`."""
 from __future__ import annotations
 
 import json
@@ -12,30 +12,31 @@ from pathlib import Path
 from . import client
 from . import config as C
 
-USAGE = """dsagent - drive Claude Code / Codex with a DualSense controller
+USAGE = """padpilot - drive Claude Code / Codex with a DualSense controller
 
-  dsagent run <cmd> [args]   run an agent (claude, codex, ...) with controller input
-  dsagent status             controller + session status (JSON)
-  dsagent tutorial           open the tutorial page (practice mode while it is open)
-  dsagent watch              print controller inputs as they happen
-  dsagent demo               light + rumble demo
-  dsagent rumble <pattern>   play a rumble pattern (tick, success, attention, error, ...)
-  dsagent press <control>    act as if a control was pressed (cross, circle, ps_hold, ...)
-  dsagent send <text>        type text + Enter into the focused session (--no-enter: text only)
-  dsagent desktop            macOS: let the buttons drive the Claude desktop app (permission + status)
-  dsagent keys               the button layout and the keys each button sends (reads your shortcuts)
-  dsagent start | stop       start / stop the background daemon
-  dsagent daemon [-f]        run the daemon in this process (-f: log to stderr)
-  dsagent setup              create the venv with hidapi (needed by the daemon)
-  dsagent doctor             check the installation
-  dsagent install-codex      add dsagent hooks to $CODEX_HOME/hooks.json (default ~/.codex)
-  dsagent uninstall-codex    remove them again
-  dsagent hook <claude|codex>   hook entry point (reads hook JSON on stdin)
+  padpilot run <cmd> [args]   run an agent (claude, codex, ...) with controller input
+  padpilot status             controller + session status (JSON)
+  padpilot tutorial           open the tutorial page (practice mode while it is open)
+  padpilot watch              print controller inputs as they happen
+  padpilot demo               light + rumble demo
+  padpilot rumble <pattern>   play a rumble pattern (tick, success, attention, error, ...)
+  padpilot press <control>    act as if a control was pressed (cross, circle, ps_hold, ...)
+  padpilot send <text>        type text + Enter into the focused session (--no-enter: text only)
+  padpilot desktop            macOS: let the buttons drive the Claude desktop app (permission + status)
+  padpilot keys               the button layout and the keys each button sends (reads your shortcuts)
+  padpilot start | stop       start / stop the background daemon
+  padpilot daemon [-f]        run the daemon in this process (-f: log to stderr)
+  padpilot setup              create the venv with hidapi (needed by the daemon)
+  padpilot doctor             check the installation
+  padpilot install-codex      add padpilot hooks to $CODEX_HOME/hooks.json (default ~/.codex)
+  padpilot uninstall-codex    remove them again
+  padpilot hook <claude|codex>   hook entry point (reads hook JSON on stdin)
 """
 
 CODEX_EVENTS = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
                 "PostToolUse", "PreCompact", "PostCompact", "SubagentStop", "Stop", "Interrupt"]
-MARK = "dsagent hook codex"
+MARK = "padpilot hook codex"
+OLD_MARK = "dsagent hook codex"  # hooks installed before 0.4, when the command was called dsagent
 
 
 def main(argv=None) -> int:
@@ -200,7 +201,7 @@ def tutorial(open_browser: bool = True) -> int:
         try:
             with urllib.request.urlopen(url, timeout=1) as r:
                 head = r.read(4096).lower()
-                if r.headers.get("Server", "").startswith("dsagent") and b"<title" in head:
+                if r.headers.get("Server", "").startswith("padpilot") and b"<title" in head:
                     break
                 err = f"another program answers on port {port}"
         except OSError as e:
@@ -241,14 +242,14 @@ def setup(quiet: bool = False, then_daemon: bool = False) -> int:
         r = subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check", "-q", "hidapi"],
                            capture_output=quiet)
         if r.returncode != 0 or not _venv_has_hid():
-            print("dsagent setup: installing hidapi failed", file=sys.stderr)
+            print("padpilot setup: installing hidapi failed", file=sys.stderr)
             if quiet and r.stderr:
                 sys.stderr.write(r.stderr.decode(errors="replace"))
             return 1
     say("venv ok")
     if then_daemon:
         py = str(C.VENV_PATH / "bin" / "python3")
-        os.execv(py, [py, "-m", "dsagent", "daemon"])
+        os.execv(py, [py, "-m", "padpilot", "daemon"])
     return 0
 
 
@@ -262,21 +263,21 @@ def doctor() -> int:
 
     print(f"python: {sys.executable} {sys.version.split()[0]}")
     line(sys.version_info >= (3, 8), "python >= 3.8")
-    line(_venv_has_hid(), f"hidapi installed in {C.VENV_PATH} (fix: dsagent setup)")
+    line(_venv_has_hid(), f"hidapi installed in {C.VENV_PATH} (fix: padpilot setup)")
     if _venv_has_hid():
         py = str(C.VENV_PATH / "bin" / "python3")
-        code = ("import hid,sys; sys.path.insert(0, %r); from dsagent.dualsense import DualSense; "
+        code = ("import hid,sys; sys.path.insert(0, %r); from padpilot.dualsense import DualSense; "
                 "print(len(DualSense.find(hid)))" % client.PKG_ROOT)
         r = subprocess.run([py, "-c", code], capture_output=True, text=True)
         n = r.stdout.strip()
         line(r.returncode == 0 and n not in ("", "0"), f"DualSense found via HID (count={n or r.stderr.strip()[-200:]})")
     st = client.request({"op": "status"})
-    line(st is not None, "daemon running (fix: dsagent start)")
+    line(st is not None, "daemon running (fix: padpilot start)")
     if st:
         line(st.get("controller") is not None, f"daemon has the controller: {st.get('controller')}")
         dk = st.get("desktop") or {}
         if dk.get("enabled") and sys.platform == "darwin":
-            line(bool(dk.get("trusted")), "Accessibility permission for desktop-app control (fix: dsagent desktop)")
+            line(bool(dk.get("trusted")), "Accessibility permission for desktop-app control (fix: padpilot desktop)")
     return 0 if ok else 1
 
 
@@ -295,7 +296,7 @@ BUTTONS = [
     ("ps+square", "PS + □"), ("ps+mic", "PS + Mic"),
 ]
 BUILTINS = {
-    "@cycle_focus": "next `dsagent run` session", "@battery": "battery level",
+    "@cycle_focus": "next `padpilot run` session", "@battery": "battery level",
     "@toggle_lock": "lock / unlock the controller", "@retry": "send your last message again",
     "@brightness_up": "lightbar brighter / dimmer", "@rumble_up": "rumble stronger / weaker",
     "@idle_light": "idle light on / off", "@sounds": "spoken cues on the controller speaker on / off", "@next_session": "next / previous session",
@@ -324,7 +325,7 @@ def keys_table() -> int:
                 out.append("reply button 1-4" if dest == "desktop" else "-")
                 continue
             if st == "@next_session":
-                out.append("cmd+shift+] / [" if dest == "desktop" else "next `dsagent run`")
+                out.append("cmd+shift+] / [" if dest == "desktop" else "next `padpilot run`")
                 continue
             if st in BUILTINS:
                 out.append("(same)")
@@ -381,13 +382,13 @@ def desktop() -> int:
     print("apps:", ", ".join(st.get("apps", [])))
     print("frontmost app:", st.get("frontmost"))
     if st.get("trusted"):
-        print("Accessibility permission: ok. With no `dsagent run` session open, the buttons now "
+        print("Accessibility permission: ok. With no `padpilot run` session open, the buttons now "
               "go to those apps while they are in front.")
         return 0
     print("Accessibility permission: MISSING.\n"
           "macOS should now show a dialog. Otherwise open System Settings > Privacy & Security > "
           "Accessibility and turn on \"Python\" (" + client.daemon_python() + ").\n"
-          "Then run `dsagent stop` and `dsagent desktop` again.")
+          "Then run `padpilot stop` and `padpilot desktop` again.")
     return 1
 
 
@@ -397,7 +398,7 @@ def _codex_hooks_path() -> Path:
 
 
 def _launcher() -> str:
-    return str(Path(client.PKG_ROOT) / "bin" / "dsagent")
+    return str(Path(client.PKG_ROOT) / "bin" / "padpilot")
 
 
 def install_codex() -> int:
@@ -405,7 +406,7 @@ def install_codex() -> int:
     data = {}
     if path.exists():
         data = json.loads(path.read_text() or "{}")
-        backup = path.with_suffix(".json.bak-dsagent")
+        backup = path.with_suffix(".json.bak-padpilot")
         if not backup.exists():
             backup.write_text(path.read_text())
     hooks = data.setdefault("hooks", {})
@@ -433,13 +434,14 @@ def uninstall_codex() -> int:
         if not hooks[ev]:
             del hooks[ev]
     path.write_text(json.dumps(data, indent=2) + "\n")
-    print(f"removed dsagent hooks from {path}")
+    print(f"removed padpilot hooks from {path}")
     return 0
 
 
 def _is_ours(group: dict) -> bool:
     for h in group.get("hooks", []):
         cmd = (h.get("command") or "").replace('"', "")
-        if MARK in cmd or ("/dsagent" in cmd and cmd.endswith(" hook codex")):
+        if any(m in cmd for m in (MARK, OLD_MARK)) or (("/padpilot" in cmd or "/dsagent" in cmd)
+                                                        and cmd.endswith(" hook codex")):
             return True
     return False

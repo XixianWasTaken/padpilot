@@ -1,4 +1,4 @@
-"""Paths and configuration. User config in ~/.dualsense-agent/config.json is deep-merged over DEFAULTS."""
+"""Paths and configuration. User config in ~/.padpilot/config.json is deep-merged over DEFAULTS."""
 from __future__ import annotations
 
 import copy
@@ -6,12 +6,38 @@ import json
 import os
 from pathlib import Path
 
-HOME = Path(os.environ.get("DSAGENT_HOME") or Path.home() / ".dualsense-agent")
+HOME = Path(os.environ.get("PADPILOT_HOME") or Path.home() / ".padpilot")
 SOCKET_PATH = HOME / "daemon.sock"
 PID_PATH = HOME / "daemon.pid"
 LOG_PATH = HOME / "daemon.log"
 CONFIG_PATH = HOME / "config.json"
 VENV_PATH = HOME / "venv"
+OLD_HOME = Path.home() / ".dualsense-agent"   # where versions before 0.4 (named dualsense-agent) kept it
+
+
+def _migrate_old_home() -> None:
+    """Move ~/.dualsense-agent to ~/.padpilot once, after stopping a daemon still running there."""
+    if os.environ.get("PADPILOT_HOME") or HOME.exists() or not OLD_HOME.is_dir():
+        return
+    import socket
+    import time
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        s.connect(str(OLD_HOME / "daemon.sock"))
+        s.sendall(b'{"op": "shutdown"}\n')
+        s.recv(256)
+        s.close()
+        time.sleep(1.0)  # let it release the controller and remove its socket
+    except OSError:
+        pass
+    try:
+        os.rename(OLD_HOME, HOME)
+    except OSError:
+        pass
+
+
+_migrate_old_home()
 
 # Colors are [r, g, b]. Light kinds: solid, breathe, blink, rainbow.
 # Rumble patterns are lists of [left(strong), right(weak), milliseconds].
@@ -53,7 +79,7 @@ DEFAULTS = {
         ["^mcp__", {"color": [0, 255, 150], "rumble": "tick"}],
     ],
     # Player LEDs fill up with the number of tool calls in the current turn (when no
-    # several `dsagent run` sessions need them to show the focus). Thresholds per LED step.
+    # several `padpilot run` sessions need them to show the focus). Thresholds per LED step.
     "progress_leds": [1, 3, 6, 11, 21],
     # A turn that ran at least this long ends with a rainbow + fanfare instead of plain green.
     "celebrate_after_s": 60,
@@ -119,7 +145,7 @@ DEFAULTS = {
     "rumble_scale": 1.0,
     # When a session asks for permission, input focus jumps to it.
     "attention_steals_focus": True,
-    # Hook-based approvals (used when the agent is NOT running under `dsagent run`,
+    # Hook-based approvals (used when the agent is NOT running under `padpilot run`,
     # e.g. Claude desktop / IDE). The hook waits this long for a button, then falls back
     # to the normal on-screen dialog. 0 disables hook approvals.
     "hook_approval_timeout_s": 45,
@@ -129,7 +155,7 @@ DEFAULTS = {
     # Let other apps read the controller too (browsers' Gamepad API). Practice mode does this anyway.
     # Off by default: shared, macOS also sees the PS button and opens its Games app.
     "share_controller": False,
-    # The tutorial page (`dsagent tutorial`) is served on http://127.0.0.1:<port>/; 0 turns it off.
+    # The tutorial page (`padpilot tutorial`) is served on http://127.0.0.1:<port>/; 0 turns it off.
     "tutorial_port": 8737,
     "idle_shutdown_minutes": 240,
     "stick_threshold": 0.6,
@@ -139,7 +165,7 @@ DEFAULTS = {
     "hold_ms": 600,
     "sequence_gap_ms": 90,
     "swipe_min": 350,
-    # Controller layout, the same for the Claude desktop app and the CLIs (`dsagent run`).
+    # Controller layout, the same for the Claude desktop app and the CLIs (`padpilot run`).
     # Values: "act:<action>" (resolved to the keys the destination really uses, including the
     # user's ~/.claude/keybindings.json and Claude's dictation shortcut; see bindings.py),
     # plain key names (enter, esc, up, ctrl+c, cmd+k, ...), "text:...", "@builtin" actions,
@@ -153,7 +179,7 @@ DEFAULTS = {
         "up": "up", "down": "down", "left": "left", "right": "right",
         "stick_up": "up", "stick_down": "down", "stick_left": "left", "stick_right": "right",
         "rstick_up": "pageup", "rstick_down": "pagedown",
-        # Desktop app: previous / next session (Cmd+Shift+[ / ]); CLIs: the next `dsagent run`.
+        # Desktop app: previous / next session (Cmd+Shift+[ / ]); CLIs: the next `padpilot run`.
         "rstick_left": "@prev_session", "rstick_right": "@next_session",
         "l1": "act:cycle_mode",
         "r1": "text:/",
@@ -189,9 +215,9 @@ DEFAULTS = {
         "codex": {},
         "desktop": {},
     },
-    # macOS: with no `dsagent run` session attached, send the buttons as real key presses to
+    # macOS: with no `padpilot run` session attached, send the buttons as real key presses to
     # the frontmost app, but only if it is one of these. Needs Accessibility permission for
-    # Python (run `dsagent desktop`).
+    # Python (run `padpilot desktop`).
     "desktop": {
         "enabled": True,
         "apps": ["com.anthropic.claudefordesktop"],
@@ -229,7 +255,7 @@ def load_config() -> dict:
         pass
     except Exception as e:  # keep running on a broken config
         import sys
-        print(f"dsagent: ignoring invalid {CONFIG_PATH}: {e}", file=sys.stderr)
+        print(f"padpilot: ignoring invalid {CONFIG_PATH}: {e}", file=sys.stderr)
     return deep_merge(DEFAULTS, user)
 
 

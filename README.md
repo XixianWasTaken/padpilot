@@ -1,17 +1,17 @@
-<p align="center"><img src="docs/logo.svg" alt="dualsense-agent: drive Claude Code and Codex with a PS5 controller" width="760"></p>
+<p align="center"><img src="docs/logo.svg" alt="padpilot: drive Claude Code and Codex with a PS5 controller" width="760"></p>
 
 <p align="center"><b>English</b> · <a href="README.zh-CN.md">中文</a></p>
 
-Lean back and drive your coding agent from the couch. **dualsense-agent** turns a PS5 DualSense into a remote for **Claude Code**, **OpenAI Codex CLI** and the **Claude desktop app**:
+Lean back and drive your coding agent from the couch. **padpilot** turns a PS5 DualSense into a remote for **Claude Code**, **OpenAI Codex CLI** and the **Claude desktop app**:
 
 - **The controller shows what the agent is doing.** The lightbar breathes blue while it thinks, blinks orange when it needs your approval and turns green when it is done. Rumble, the adaptive triggers and the controller's own speaker do the same.
 - **The buttons drive it.** ✕ approves, ○ interrupts, △ says "continue", R3 retries your last message, and holding △ opens a wheel of 8 ready-made prompts. One layout works in all three apps.
 - **A built-in tutorial teaches the buttons** step by step, with the real controller. While the page is open, nothing you press reaches the agent.
 
-<p align="center"><img src="docs/tutorial.jpg" alt="The tutorial page: a Claude permission prompt on screen, the controller picture with ✕ highlighted" width="560"></p>
+<p align="center"><img src="docs/tutorial.jpg" alt="The tutorial page: Claude has finished a turn and asks whether to continue; on the controller picture, △ is highlighted" width="560"></p>
 
 ```
- Claude Code / Codex ──hooks──▶ dsagent daemon ──HID──▶ DualSense (light / rumble / triggers / speaker)
+ Claude Code / Codex ──hooks──▶ padpilot daemon ──HID──▶ DualSense (light / rumble / triggers / speaker)
         ▲                          │   ▲
         └──── keystrokes ◀─────────┘   └──── buttons / sticks / touchpad
      (PTY wrapper, or the Claude desktop app on macOS)
@@ -22,31 +22,31 @@ Lean back and drive your coding agent from the couch. **dualsense-agent** turns 
 You need a DualSense (USB or Bluetooth), Python 3.8 or newer, and macOS. Linux should work for the terminal parts but has not been tested; controlling the Claude desktop app is macOS only.
 
 ```bash
-git clone https://github.com/XixianWasTaken/dualsense-agent.git
-cd dualsense-agent
-./bin/dsagent setup                                   # installs hidapi into ~/.dualsense-agent/venv
-ln -sf "$PWD/bin/dsagent" ~/.local/bin/dsagent        # put dsagent on your PATH
+git clone https://github.com/XixianWasTaken/padpilot.git
+cd padpilot
+./bin/padpilot setup                                   # installs hidapi into ~/.padpilot/venv
+ln -sf "$PWD/bin/padpilot" ~/.local/bin/padpilot        # put padpilot on your PATH
 
 claude plugin marketplace add "$PWD"                  # the Claude Code plugin (hooks + slash commands)
-claude plugin install dualsense@dualsense-agent
+claude plugin install padpilot@padpilot
 
-dsagent install-codex      # optional: Codex hooks (backs up ~/.codex/hooks.json first), then run /hooks in Codex once
-dsagent doctor             # checks hidapi, the controller and the daemon
-dsagent demo               # rainbow light + rumble
+padpilot install-codex      # optional: Codex hooks (backs up ~/.codex/hooks.json first), then run /hooks in Codex once
+padpilot doctor             # checks hidapi, the controller and the daemon
+padpilot demo               # rainbow light + rumble
 ```
 
-Then learn the buttons: type `/dualsense:tutorial` in Claude Code, or run `dsagent tutorial`.
+Then learn the buttons: type `/padpilot:tutorial` in Claude Code, or run `padpilot tutorial`.
 
 ## Use it
 
 ```bash
-alias cc='dsagent run claude'   # Claude Code, with the controller typing into it
-alias cx='dsagent run codex'    # Codex CLI
+alias cc='padpilot run claude'   # Claude Code, with the controller typing into it
+alias cx='padpilot run codex'    # Codex CLI
 ```
 
-`dsagent run` wraps the agent in a terminal that looks and works exactly as before; the controller's buttons become keystrokes. Without the wrapper (an IDE, or the agent started directly) the lights and rumble still work, and permission requests wait up to 45 seconds for ✕ (approve) or ○ (deny) before the normal dialog appears.
+`padpilot run` wraps the agent in a terminal that looks and works exactly as before; the controller's buttons become keystrokes. Without the wrapper (an IDE, or the agent started directly) the lights and rumble still work, and permission requests wait up to 45 seconds for ✕ (approve) or ○ (deny) before the normal dialog appears.
 
-**Claude desktop app (macOS).** When no `dsagent run` session is open, buttons are sent as real key presses to the Claude app, but only while it is the frontmost window. The first time, run `dsagent desktop` and allow Accessibility access for the daemon's Python.
+**Claude desktop app (macOS).** When no `padpilot run` session is open, buttons are sent as real key presses to the Claude app, but only while it is the frontmost window. The first time, run `padpilot desktop` and allow Accessibility access for the daemon's Python.
 
 ## What the controller tells you
 
@@ -88,11 +88,11 @@ The same button does the same thing in the desktop app, Claude Code and Codex. E
 | PS | battery level; **hold** to force-interrupt |
 | PS + ↑↓ / ←→ / □ / △ / mic | brightness · rumble strength · idle light · speaker sounds · lock the controller |
 
-`dsagent keys` prints the full table, with the exact keys each button sends in each app under your current settings.
+`padpilot keys` prints the full table, with the exact keys each button sends in each app under your current settings.
 
 ## Configure
 
-Put only what you want to change in `~/.dualsense-agent/config.json`; it is merged over the defaults in [dsagent/config.py](dsagent/config.py). Then run `dsagent stop`, and the daemon restarts with it the next time it is needed.
+Put only what you want to change in `~/.padpilot/config.json`; it is merged over the defaults in [padpilot/config.py](padpilot/config.py). Then run `padpilot stop`, and the daemon restarts with it the next time it is needed.
 
 ```json
 {
@@ -107,20 +107,20 @@ Put only what you want to change in `~/.dualsense-agent/config.json`; it is merg
 ## Commands
 
 ```bash
-dsagent tutorial          # open the tutorial page (practice mode while it is open)
-dsagent status            # controller, battery and sessions as JSON
-dsagent keys              # the button layout for your settings
-dsagent watch --practice  # print every press without sending anything
-dsagent send "write a test"
-dsagent doctor
+padpilot tutorial          # open the tutorial page (practice mode while it is open)
+padpilot status            # controller, battery and sessions as JSON
+padpilot keys              # the button layout for your settings
+padpilot watch --practice  # print every press without sending anything
+padpilot send "write a test"
+padpilot doctor
 ```
 
-Slash commands in Claude Code: `/dualsense:tutorial`, `/dualsense:status`, `/dualsense:demo`, `/dualsense:doctor`, `/dualsense:desktop`.
+Slash commands in Claude Code: `/padpilot:tutorial`, `/padpilot:status`, `/padpilot:demo`, `/padpilot:doctor`, `/padpilot:desktop`.
 
 ## Troubleshooting
 
 - Only one program can open the controller. Steam and other controller mappers can keep the daemon from opening it.
-- Logs: `~/.dualsense-agent/daemon.log` and `daemon.stderr`.
+- Logs: `~/.padpilot/daemon.log` and `daemon.stderr`.
 - The daemon keeps the controller to itself, so macOS never sees the PS button (which would otherwise open Apple's Games app). Set `"share_controller": true` if another app needs to read it too.
 
 The full reference (every light, rumble, sound and edge case) is in the [Chinese README](README.zh-CN.md).

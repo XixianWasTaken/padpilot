@@ -48,7 +48,7 @@ def _dispatch(source: str, p: dict) -> None:
         "event": event,
         "session": p.get("session_id") or "",
         "cwd": p.get("cwd") or "",
-        "wrapper": os.environ.get("DSAGENT_WRAPPER_ID") or None,
+        "wrapper": os.environ.get("PADPILOT_WRAPPER_ID") or None,
         "data": {k: p[k] for k in KEEP_FIELDS if k in p},
     }
     # The last prompt, for the retry button (kept in the daemon's memory only).
@@ -89,5 +89,5 @@ def run_codex_notify(argv) -> int:
     if p.get("type") == "agent-turn-complete":
         client.request({"op": "event", "source": "codex", "event": "AgentTurnComplete",
                         "session": p.get("thread-id") or "", "cwd": p.get("cwd") or "",
-                        "wrapper": os.environ.get("DSAGENT_WRAPPER_ID") or None, "data": {}})
+                        "wrapper": os.environ.get("PADPILOT_WRAPPER_ID") or None, "data": {}})
     return 0

@@ -1,6 +1,6 @@
-"""`dsagent run <cmd...>`: run an agent CLI inside a PTY and inject controller keystrokes.
+"""`padpilot run <cmd...>`: run an agent CLI inside a PTY and inject controller keystrokes.
 
-The terminal is passed through untouched. The child gets DSAGENT_WRAPPER_ID so its hooks
+The terminal is passed through untouched. The child gets PADPILOT_WRAPPER_ID so its hooks
 report to the right session.
 """
 from __future__ import annotations
@@ -221,12 +221,12 @@ class Wrapper:
 
         pid, master = pty.fork()
         if pid == 0:  # child
-            os.environ["DSAGENT_WRAPPER_ID"] = env_id
-            os.environ["DSAGENT_AGENT"] = self.agent
+            os.environ["PADPILOT_WRAPPER_ID"] = env_id
+            os.environ["PADPILOT_AGENT"] = self.agent
             try:
                 os.execvp(self.argv[0], self.argv)
             except OSError as e:
-                sys.stderr.write(f"dsagent: cannot run {self.argv[0]}: {e}\n")
+                sys.stderr.write(f"padpilot: cannot run {self.argv[0]}: {e}\n")
                 os._exit(127)
         self.master = master
 
@@ -319,6 +319,6 @@ class Wrapper:
 
 def run_wrapped(argv: List[str]) -> int:
     if not argv:
-        sys.stderr.write("usage: dsagent run <command> [args...]   e.g. dsagent run claude\n")
+        sys.stderr.write("usage: padpilot run <command> [args...]   e.g. padpilot run claude\n")
         return 2
     return Wrapper(argv).run()

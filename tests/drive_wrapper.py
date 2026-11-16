@@ -1,8 +1,8 @@
-"""Run `dsagent run <cmd>` in a pseudo-terminal and drive it via the daemon. Prints a transcript."""
+"""Run `padpilot run <cmd>` in a pseudo-terminal and drive it via the daemon. Prints a transcript."""
 import os, pty, select, subprocess, sys, time, json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DS = os.path.join(ROOT, "bin", "dsagent")
+DS = os.path.join(ROOT, "bin", "padpilot")
 
 def ds(*args):
     return subprocess.run([DS, *args], capture_output=True, text=True).stdout.strip()

@@ -1,57 +1,57 @@
-<p align="center"><img src="docs/logo.svg" alt="dualsense-agent" width="760"></p>
+<p align="center"><img src="docs/logo.svg" alt="padpilot" width="760"></p>
 
 <p align="center"><a href="README.md">English</a> · <b>中文</b></p>
 
-# dualsense-agent：用 PS5 手柄操控 Claude Code / Codex
+# padpilot：用 PS5 手柄操控 Claude Code / Codex
 
 这个插件让 DualSense 手柄的**呼吸灯、震动和自适应扳机**实时显示 agent 在做什么，再用**按键**来审批、中断、选菜单、发送预设提示词。它同时支持 Claude Code 和 OpenAI Codex CLI，手柄可以走 USB 或蓝牙。
 
 ```
- Claude Code / Codex ──hooks──▶ dsagent daemon ──HID──▶ DualSense（灯 / 震动 / 扳机）
+ Claude Code / Codex ──hooks──▶ padpilot daemon ──HID──▶ DualSense（灯 / 震动 / 扳机）
         ▲                          │   ▲
         └──── PTY 键盘注入 ◀────────┘   └──── 按键 / 摇杆 / 触摸板
-            (dsagent run claude)
+            (padpilot run claude)
 ```
 
 它由三部分组成：
 
-- **daemon**（`dsagent daemon`）：独占手柄，把事件渲染成灯效和震动，并把按键转发给当前焦点会话。第一次用到时会自动启动，空闲 4 小时后自动退出。
-- **hooks**：Claude Code 插件自带。Codex 通过 `dsagent install-codex` 安装。每个 hook 约 40ms，任何错误都不会影响 agent 运行。
-- **PTY 包装器**（`dsagent run claude` / `dsagent run codex`）：终端照常显示，手柄按键会被转换成键盘输入。它会自动识别光标键模式（DECCKM）和 kitty 键盘协议。
+- **daemon**（`padpilot daemon`）：独占手柄，把事件渲染成灯效和震动，并把按键转发给当前焦点会话。第一次用到时会自动启动，空闲 4 小时后自动退出。
+- **hooks**：Claude Code 插件自带。Codex 通过 `padpilot install-codex` 安装。每个 hook 约 40ms，任何错误都不会影响 agent 运行。
+- **PTY 包装器**（`padpilot run claude` / `padpilot run codex`）：终端照常显示，手柄按键会被转换成键盘输入。它会自动识别光标键模式（DECCKM）和 kitty 键盘协议。
 
 ## 安装
 
 需要 macOS 或 Linux，以及 Python ≥ 3.8。
 
 ```bash
-git clone https://github.com/XixianWasTaken/dualsense-agent.git
-cd dualsense-agent
+git clone https://github.com/XixianWasTaken/padpilot.git
+cd padpilot
 
-# 1. 运行时环境（在 ~/.dualsense-agent/venv 里安装 hidapi）
-./bin/dsagent setup
-ln -sf "$PWD/bin/dsagent" ~/.local/bin/dsagent   # 让 dsagent 进 PATH
+# 1. 运行时环境（在 ~/.padpilot/venv 里安装 hidapi）
+./bin/padpilot setup
+ln -sf "$PWD/bin/padpilot" ~/.local/bin/padpilot   # 让 padpilot 进 PATH
 
 # 2. Claude Code 插件
 claude plugin marketplace add "$PWD"
-claude plugin install dualsense@dualsense-agent
+claude plugin install padpilot@padpilot
 
 # 3. （可选）Codex hooks，写入 ~/.codex/hooks.json，会先备份原文件
-dsagent install-codex      # 然后在 Codex 里执行一次 /hooks 信任这些 hook
+padpilot install-codex      # 然后在 Codex 里执行一次 /hooks 信任这些 hook
 
 # 4. 检查
-dsagent doctor
-dsagent demo               # 彩虹灯 + 震动
-dsagent watch              # 按手柄，终端会打印按键名
+padpilot doctor
+padpilot demo               # 彩虹灯 + 震动
+padpilot watch              # 按手柄，终端会打印按键名
 ```
 
 日常使用（建议加别名）：
 
 ```bash
-alias cc='dsagent run claude'
-alias cx='dsagent run codex'
+alias cc='padpilot run claude'
+alias cx='padpilot run codex'
 ```
 
-不经过 `dsagent run` 也能用（比如 Claude 桌面端、IDE）：灯效和震动照常工作，**权限审批改由 hook 处理**，具体见下方的「审批」一节。在 macOS 上，按键还能直接操作 **Claude 桌面 app**，见「桌面 app」一节。
+不经过 `padpilot run` 也能用（比如 Claude 桌面端、IDE）：灯效和震动照常工作，**权限审批改由 hook 处理**，具体见下方的「审批」一节。在 macOS 上，按键还能直接操作 **Claude 桌面 app**，见「桌面 app」一节。
 
 ## 灯效 / 震动 / 扳机
 
@@ -91,7 +91,7 @@ alias cx='dsagent run codex'
 
 几个指示灯：
 - **玩家灯**亮 1 / 2 格（中间对称）且 agent 不在干活时，表示**下一步卡片上有 1 / 2 个回复按钮可以用 R1 组合键选**。
-- 其他时候**玩家灯**是本轮的进度条：工具调用次数达到 1 / 3 / 6 / 11 / 21 时依次多亮一格，开始新一轮时清空。同时开着两个以上 `dsagent run` 会话时，玩家灯改为显示焦点是第几个会话。
+- 其他时候**玩家灯**是本轮的进度条：工具调用次数达到 1 / 3 / 6 / 11 / 21 时依次多亮一格，开始新一轮时清空。同时开着两个以上 `padpilot run` 会话时，玩家灯改为显示焦点是第几个会话。
 - **麦克风灯亮**表示有 app 正在录音，或手柄输入已锁定。
 - **按 PS 键**，玩家灯和光条会显示电量（红到绿）。
 - **按住 △ 拨右摇杆**时，光条变成所选方向的颜色（8 个方向 8 种色相）。
@@ -99,7 +99,7 @@ alias cx='dsagent run codex'
 
 ## 按键
 
-**桌面 app 和 CLI 用同一套布局**：同一个键在 Claude 桌面 app、Claude Code CLI（`dsagent run claude`）、Codex CLI（`dsagent run codex`）里做同一件事。映射写的是“功能”（提交、取消、清空输入……），按下时再换算成目标程序实际使用的组合键。某个程序没有这个功能时，按了不发任何按键，光条红闪一下。
+**桌面 app 和 CLI 用同一套布局**：同一个键在 Claude 桌面 app、Claude Code CLI（`padpilot run claude`）、Codex CLI（`padpilot run codex`）里做同一件事。映射写的是“功能”（提交、取消、清空输入……），按下时再换算成目标程序实际使用的组合键。某个程序没有这个功能时，按了不发任何按键，光条红闪一下。
 
 | 按键 | 功能 | 桌面 app | Claude CLI | Codex CLI |
 |---|---|---|---|---|
@@ -120,9 +120,9 @@ alias cx='dsagent run codex'
 | **L1 + ↓** | 思考 / effort | ⌘⇧E（effort 选择器） | Meta+T（思考开关） | - |
 | 十字键 / 左摇杆 | 方向键，按住连发 | ✓ | ✓ | ✓ |
 | 右摇杆 ↑↓ / 触摸板上下滑 | PageUp / PageDown | ✓ | ✓ | ✓ |
-| **右摇杆 ← / →** | 上一个 / 下一个会话（不连发） | ⌘⇧[ / ⌘⇧] | 切换 `dsagent run` 会话 | 同左 |
+| **右摇杆 ← / →** | 上一个 / 下一个会话（不连发） | ⌘⇧[ / ⌘⇧] | 切换 `padpilot run` 会话 | 同左 |
 | Options | 查看改动 / 过程 | ⌘⇧D（Show Changes） | Ctrl+O（transcript） | Ctrl+T |
-| Create 短按 | 切换焦点会话（多个 `dsagent run` 时） | ✓ | ✓ | ✓ |
+| Create 短按 | 切换焦点会话（多个 `padpilot run` 时） | ✓ | ✓ | ✓ |
 | **Create 长按** | **新会话** | ⌘N | 清空输入 + `/clear` | `/new` |
 | 触摸板按下 | 回退 / 编辑上一条消息 | Esc Esc | Esc Esc | Esc Esc |
 | L3 | 命令面板 | ⌘K | - | - |
@@ -139,7 +139,7 @@ alias cx='dsagent run codex'
 
 桌面 app 的快捷键来自 Claude app 自带的快捷键帮助表（⌘⇧[ / ⌘⇧] 是它列出的 Previous / Next session，⌘↩ 是 Queue for later，⌘⇧I 是 Open model menu，⌘⇧E 是 Open effort selector，Esc Esc 是 Rewind）。
 
-组合键的规则：**按住 PS、R1 或 L1，再按另一个键**。PS、R1、L1 自己的短按 / 长按在松开时才触发，用过组合键就不触发，所以不会误按出 `/` 或电量。长按到时间会“嗒”轻震一下，这时松开就是长按。PS 层的设置会写进 `~/.dualsense-agent/config.json`，重启后保留。
+组合键的规则：**按住 PS、R1 或 L1，再按另一个键**。PS、R1、L1 自己的短按 / 长按在松开时才触发，用过组合键就不触发，所以不会误按出 `/` 或电量。长按到时间会“嗒”轻震一下，这时松开就是长按。PS 层的设置会写进 `~/.padpilot/config.json`，重启后保留。
 
 #### 下一步卡片（R1 + 面键）
 
@@ -153,13 +153,13 @@ Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“�
 
 默认 8 句（上开始顺时针）：继续 / 运行测试并修复失败的用例 / 解释一下你刚才做了什么 / 先停下来，问我再继续 / 提交代码 / 给这部分写测试 / 总结一下改动 / 继续修这个 bug。在配置里改 `"prompt_wheel": [...]`。拨到新方向时轻震一下，摇杆回中不会取消，松开 △ 才确定。
 
-`dsagent keys` 会按你当前的设置打印这张表。
+`padpilot keys` 会按你当前的设置打印这张表。
 
 ### 自动适配你的快捷键
 
 不用把快捷键改回默认。每次按键时 daemon 都会检查下面两个文件，改动后立即生效，不用重启：
 
-- **Claude Code CLI**：`~/.claude/keybindings.json`（设置了 `CLAUDE_CONFIG_DIR` 时用那个目录）。按文档规则叠加在默认快捷键上，包括 `null` 取消绑定和 `ctrl+x ctrl+l` 这类连续按键。比如你把 `chat:cancel` 改成 `ctrl+q`，○ 就会发 `ctrl+q`。等审批时 ✕ / ○ 用 `Confirmation` 那组绑定。终端发不出来的组合键（比如带 `cmd` 的）会被跳过，改用同一功能的其他绑定；一个都发不出来时，红闪提示。文件格式写错时，退回默认快捷键，`dsagent keys` 会显示原因。
+- **Claude Code CLI**：`~/.claude/keybindings.json`（设置了 `CLAUDE_CONFIG_DIR` 时用那个目录）。按文档规则叠加在默认快捷键上，包括 `null` 取消绑定和 `ctrl+x ctrl+l` 这类连续按键。比如你把 `chat:cancel` 改成 `ctrl+q`，○ 就会发 `ctrl+q`。等审批时 ✕ / ○ 用 `Confirmation` 那组绑定。终端发不出来的组合键（比如带 `cmd` 的）会被跳过，改用同一功能的其他绑定；一个都发不出来时，红闪提示。文件格式写错时，退回默认快捷键，`padpilot keys` 会显示原因。
 - **Claude 桌面 app**：读取 `~/Library/Application Support/Claude/claude_desktop_config.json` 里的听写快捷键（`preferences.dictationShortcut`）。默认 ⌘D；改过的话用你的组合键；关掉了的话，按麦克风键红闪。
 - 读不到的：桌面 app 里“回车发送还是 ⌘回车发送”看起来是账号级的网页设置，本地没有存，所以 ✕ 固定发回车。Codex CLI 没有快捷键配置文件，用它的固定快捷键。
 
@@ -183,9 +183,9 @@ Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“�
 }
 ```
 
-`cues` 的键是会话状态（`done` `permission` `error` `waiting` …），值是 `/System/Library/Sounds` 里的音效名（Basso Blow Bottle Frog Funk Glass Hero Morse Ping Pop Purr Sosumi Submarine Tink），或者一个声音文件的路径；删掉某个键就不放。想先听一下：`python3 -m dsagent.sound play Hero`。`volume` 是喇叭音量（0–100），比 100 小的值还没在真手柄上试过。
+`cues` 的键是会话状态（`done` `permission` `error` `waiting` …），值是 `/System/Library/Sounds` 里的音效名（Basso Blow Bottle Frog Funk Glass Hero Morse Ping Pop Purr Sosumi Submarine Tink），或者一个声音文件的路径；删掉某个键就不放。想先听一下：`python3 -m padpilot.sound play Hero`。`volume` 是喇叭音量（0–100），比 100 小的值还没在真手柄上试过。
 
-## 审批（不走 `dsagent run` 时）
+## 审批（不走 `padpilot run` 时）
 
 Claude 桌面端、IDE 或直接运行的 `claude` / `codex` 没有 PTY 可以注入按键。这时 `PermissionRequest` hook 会等手柄输入，最长 45 秒：
 
@@ -198,25 +198,25 @@ Claude 桌面端、IDE 或直接运行的 `claude` / `codex` 没有 PTY 可以�
 
 ## 桌面 app（macOS）
 
-没有 `dsagent run` 会话时，daemon 会把按键模拟成真实的键盘按下，发给**最前面的 Claude 桌面 app**（`com.anthropic.claudefordesktop`）。别的 app 在前面时不发，手柄光条红闪一下表示没送达。
+没有 `padpilot run` 会话时，daemon 会把按键模拟成真实的键盘按下，发给**最前面的 Claude 桌面 app**（`com.anthropic.claudefordesktop`）。别的 app 在前面时不发，手柄光条红闪一下表示没送达。
 
 第一次使用要给权限：
 
 ```bash
-dsagent desktop    # 弹出系统对话框；或到 系统设置 → 隐私与安全性 → 辅助功能 打开 “Python”
-dsagent stop && dsagent desktop   # 授权后再跑一次，显示 ok 就好了
+padpilot desktop    # 弹出系统对话框；或到 系统设置 → 隐私与安全性 → 辅助功能 打开 “Python”
+padpilot stop && padpilot desktop   # 授权后再跑一次，显示 ok 就好了
 ```
 
-- 授权给的是 daemon 用的 Python（`~/.dualsense-agent/venv` 背后的 Python.app）。daemon 以独立进程启动，所以不管是 Claude hook、终端还是 `dsagent start` 拉起它，用的都是这一个授权。
-- 因此 daemon 不从项目目录加载代码，而是在启动时复制一份到 `~/.dualsense-agent/runtime/`（macOS 不允许这样启动的进程读取桌面、文稿等文件夹）。
+- 授权给的是 daemon 用的 Python（`~/.padpilot/venv` 背后的 Python.app）。daemon 以独立进程启动，所以不管是 Claude hook、终端还是 `padpilot start` 拉起它，用的都是这一个授权。
+- 因此 daemon 不从项目目录加载代码，而是在启动时复制一份到 `~/.padpilot/runtime/`（macOS 不允许这样启动的进程读取桌面、文稿等文件夹）。
 - 按键布局见上面的「按键」一节。
 - **麦克风键 = Claude app 自带的听写**（输入框右边那个麦克风）：按一下开始说话，再按一下停止；或者按住说话、松开结束。快捷键自动从 Claude 设置里读取。听写期间光条白色快呼吸、麦克风灯亮。这是通过检测“有没有 app 在录音”实现的，所以用别的方式开的听写也会亮。
-- 有 `dsagent run` 会话时按键优先发给它。
+- 有 `padpilot run` 会话时按键优先发给它。
 - 想让别的 app 也接收按键，把 bundle id 加进配置的 `"desktop": {"apps": [...]}`；想关掉就设 `"enabled": false`。
 
 ## 配置
 
-`~/.dualsense-agent/config.json` 会深度合并到 [dsagent/config.py](dsagent/config.py) 的 `DEFAULTS` 上，只写想改的部分即可：
+`~/.padpilot/config.json` 会深度合并到 [padpilot/config.py](padpilot/config.py) 的 `DEFAULTS` 上，只写想改的部分即可：
 
 ```json
 {
@@ -239,39 +239,39 @@ dsagent stop && dsagent desktop   # 授权后再跑一次，显示 ok 就好了
 - 映射的键名可以是组合（`"ps+up"`、`"r1+cross"`，修饰键列表在 `"modifiers"`）、长按（`"create_hold"`）、松开（推送说话的 `"mic_up"`）
 - 以上几种组成的列表：按顺序执行，每步间隔 `sequence_gap_ms`
 
-`profiles.claude`、`profiles.codex`、`profiles.desktop` 可以只给某一个程序覆盖映射，默认都是空的，保证布局处处一致。改完配置后执行 `dsagent stop`，下次用到时会自动用新配置重启。
+`profiles.claude`、`profiles.codex`、`profiles.desktop` 可以只给某一个程序覆盖映射，默认都是空的，保证布局处处一致。改完配置后执行 `padpilot stop`，下次用到时会自动用新配置重启。
 
 ## 其它命令
 
 ```bash
-dsagent status            # JSON：手柄、电量、会话状态
-dsagent send "写个测试"    # 往焦点会话（或桌面 app）输入文字并回车；--no-enter 只输入不回车
-dsagent desktop           # macOS：桌面 app 控制的权限和状态
-dsagent keys              # 按键布局，以及按你当前的快捷键设置，每个键在各个程序里实际发什么
-dsagent press cross       # 模拟按键，方便调试和写脚本
-dsagent tutorial          # 打开新手教程网页；网页开着就是练习模式
-dsagent watch --practice  # 终端版练习模式：灯和震动照常，但不往任何 app 发键；实时显示每个键按了多久、识别成什么（守护进程重启后自动重连）
-dsagent rumble success    # 播放一段震动
-dsagent uninstall-codex
+padpilot status            # JSON：手柄、电量、会话状态
+padpilot send "写个测试"    # 往焦点会话（或桌面 app）输入文字并回车；--no-enter 只输入不回车
+padpilot desktop           # macOS：桌面 app 控制的权限和状态
+padpilot keys              # 按键布局，以及按你当前的快捷键设置，每个键在各个程序里实际发什么
+padpilot press cross       # 模拟按键，方便调试和写脚本
+padpilot tutorial          # 打开新手教程网页；网页开着就是练习模式
+padpilot watch --practice  # 终端版练习模式：灯和震动照常，但不往任何 app 发键；实时显示每个键按了多久、识别成什么（守护进程重启后自动重连）
+padpilot rumble success    # 播放一段震动
+padpilot uninstall-codex
 ```
 
-插件里的斜杠命令：`/dualsense:tutorial`、`/dualsense:status`、`/dualsense:demo`、`/dualsense:doctor`、`/dualsense:desktop`。
+插件里的斜杠命令：`/padpilot:tutorial`、`/padpilot:status`、`/padpilot:demo`、`/padpilot:doctor`、`/padpilot:desktop`。
 
 ### 新手教程
 
-在 Claude Code 里输入 `/dualsense:tutorial`（或在终端运行 `dsagent tutorial`），会在浏览器里打开中英双语的新手教程：一步一个键，用真手柄、点图或用键盘都能练。
+在 Claude Code 里输入 `/padpilot:tutorial`（或在终端运行 `padpilot tutorial`），会在浏览器里打开中英双语的新手教程：一步一个键，用真手柄、点图或用键盘都能练。
 
 - 页面由守护进程在 `http://127.0.0.1:8737/` 提供（端口可在配置里用 `"tutorial_port"` 改，设成 0 就关掉）。只有这个页面自己能用它：Host 必须是本机，Origin 必须是这个地址。
 - **页面开着就是练习模式**：灯和震动照常，按键只在页面里生效，不会发给 Claude；关掉页面就退出练习，不用开终端。守护进程重启后，页面会自己重连。
 - 页面通过守护进程读按键，所以手柄一直**独占**（macOS 上 hidapi 的默认方式）：macOS 看不到 PS 键，不会打开 Apple「游戏」App。不独占时按 PS 会打开它（2026-11-16 实测）。麦克风键也能读到，浏览器自带的手柄接口读不到这个键。
 - 教程里的光条颜色会同步到真手柄的光条上。
-- 教程源文件是 [dsagent/tutorial.html](dsagent/tutorial.html)，也发布成了 claude.ai 上的页面；那个版本读不到手柄，只能点图或用键盘。
+- 教程源文件是 [padpilot/tutorial.html](padpilot/tutorial.html)，也发布成了 claude.ai 上的页面；那个版本读不到手柄，只能点图或用键盘。
 - 想让别的程序（比如浏览器的手柄接口）也能读手柄，在配置里设 `"share_controller": true`。代价是按 PS 会打开「游戏」App。
 
 ## 故障排查
 
-- `dsagent doctor` 会逐项检查 hidapi、手柄、daemon。
-- 日志在 `~/.dualsense-agent/daemon.log` 和 `daemon.stderr`。
+- `padpilot doctor` 会逐项检查 hidapi、手柄、daemon。
+- 日志在 `~/.padpilot/daemon.log` 和 `daemon.stderr`。
 - macOS 下手柄只能被一个进程打开。Steam、DS4Windows 类工具或其他手柄映射软件占用手柄时，daemon 会打不开它。
 - 蓝牙连接时，daemon 会读取一次 feature report 0x05，把手柄切到完整报告模式；拔掉 USB 后会自动重连。
 

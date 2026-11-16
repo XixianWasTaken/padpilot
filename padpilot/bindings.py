@@ -209,7 +209,7 @@ class Resolver:
         return list(CODEX_KEYS[action]) if action in CODEX_KEYS else None
 
     def describe(self) -> dict:
-        """What was detected, for `dsagent keys` / status."""
+        """What was detected, for `padpilot keys` / status."""
         self.claude_file.get()
         self.desktop_file.get()
         dict_keys, dict_src = self.desktop_dictation()

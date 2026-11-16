@@ -1,13 +1,13 @@
-"""Interactive end-to-end test: real `claude` under `dsagent run`, driven only through the daemon."""
+"""Interactive end-to-end test: real `claude` under `padpilot run`, driven only through the daemon."""
 import json, os, pty, re, select, subprocess, sys, time, fcntl, termios, struct
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DS = os.path.join(ROOT, "bin", "dsagent")
-WORK = "/tmp/dsagent-e2e"
+DS = os.path.join(ROOT, "bin", "padpilot")
+WORK = "/tmp/padpilot-e2e"
 KITTY = "kitty" in sys.argv
 seen_push = []
 os.makedirs(WORK, exist_ok=True)
-proof = os.path.join(WORK, "dsagent-proof.txt")
+proof = os.path.join(WORK, "padpilot-proof.txt")
 if os.path.exists(proof):
     os.remove(proof)
 
@@ -67,7 +67,7 @@ for _ in range(6):
 log[:] = [x for x in log if x[0] not in ("trusted", "browser")]
 step("reached the prompt using only controller presses", bool(re.search(PROMPT, clean(buf[-6000:]))))
 step("wrapper attached", any(t["agent"] == "claude" for t in json.loads(ds("status"))["targets"]))
-ds("send", "Use the Bash tool to run exactly this command: touch dsagent-proof.txt   Then reply with the single word: finished")
+ds("send", "Use the Bash tool to run exactly this command: touch padpilot-proof.txt   Then reply with the single word: finished")
 got = pump(60, r"Do you want to proceed|Allow|proceed\?")
 step("permission dialog shown", got)
 time.sleep(0.5)
@@ -102,7 +102,7 @@ step("daemon state = idle after interrupt", any(s[1] == "idle" for s in st))
 LONG = "Write the numbers from 1 to 300, one per line, with a short fun fact about each."
 def last_user_text():
     import glob
-    files = glob.glob(os.path.expanduser("~/.claude/projects/*dsagent-e2e*/*.jsonl"))
+    files = glob.glob(os.path.expanduser("~/.claude/projects/*padpilot-e2e*/*.jsonl"))
     if not files:
         return None
     last = None

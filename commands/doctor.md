@@ -1,7 +1,7 @@
 ---
 description: Diagnose the DualSense plugin installation
-allowed-tools: Bash(dsagent:*)
+allowed-tools: Bash(padpilot:*)
 ---
-!`dsagent doctor 2>&1`
+!`padpilot doctor 2>&1`
 
 Explain each FAIL line above and the exact command that fixes it. If everything is ok, say so in one line.

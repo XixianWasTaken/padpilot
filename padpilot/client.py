@@ -57,8 +57,8 @@ def daemon_python() -> str:
 
 
 def _stage_package() -> str:
-    """Copy the dsagent package to $DSAGENT_HOME/runtime/<content hash>/ and return that root."""
-    src = os.path.join(PKG_ROOT, "dsagent")
+    """Copy the padpilot package to $PADPILOT_HOME/runtime/<content hash>/ and return that root."""
+    src = os.path.join(PKG_ROOT, "padpilot")
     names = sorted(n for n in os.listdir(src) if n.endswith((".py", ".html")))
     h = hashlib.sha1()
     blobs = {}
@@ -68,11 +68,11 @@ def _stage_package() -> str:
         h.update(n.encode() + b"\0" + blobs[n] + b"\0")
     runtime = C.HOME / "runtime"
     root = runtime / h.hexdigest()[:12]
-    if not (root / "dsagent" / "__init__.py").exists():
+    if not (root / "padpilot" / "__init__.py").exists():
         tmp = Path(tempfile.mkdtemp(prefix=".stage-", dir=str(C.HOME)))
-        (tmp / "dsagent").mkdir()
+        (tmp / "padpilot").mkdir()
         for n, data in blobs.items():
-            (tmp / "dsagent" / n).write_bytes(data)
+            (tmp / "padpilot" / n).write_bytes(data)
         runtime.mkdir(exist_ok=True)
         try:
             os.rename(tmp, root)
@@ -99,7 +99,7 @@ def start_daemon(wait: float = 2.0) -> bool:
     C.ensure_home()
     venv_py = C.VENV_PATH / "bin" / "python3"
     # First run: build the venv (installs hidapi) and then become the daemon.
-    args = ["-m", "dsagent", "daemon"] if venv_py.exists() else ["-m", "dsagent", "setup", "--quiet", "--then-daemon"]
+    args = ["-m", "padpilot", "daemon"] if venv_py.exists() else ["-m", "padpilot", "setup", "--quiet", "--then-daemon"]
     env = dict(os.environ)
     env["PYTHONPATH"] = PKG_ROOT + os.pathsep + env.get("PYTHONPATH", "")
     spawned = False
