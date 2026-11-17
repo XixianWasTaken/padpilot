@@ -11,8 +11,9 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
+from . import __version__
 from . import config as C
 
 PKG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,21 +57,43 @@ def daemon_python() -> str:
     return str(venv_py) if venv_py.exists() else sys.executable
 
 
-def _stage_package() -> str:
-    """Copy the padpilot package to $PADPILOT_HOME/runtime/<content hash>/ and return that root."""
+def _package_files() -> List[str]:
+    """The files the daemon runs: the package's .py and .html files and the pages' fonts."""
     src = os.path.join(PKG_ROOT, "padpilot")
     names = sorted(n for n in os.listdir(src) if n.endswith((".py", ".html")))
-    fonts = os.path.join(src, "fonts")  # the pages' web fonts
+    fonts = os.path.join(src, "fonts")
     if os.path.isdir(fonts):
         names += sorted("fonts/" + n for n in os.listdir(fonts) if n.endswith((".woff2", ".txt")))
+    return names
+
+
+def _package() -> Tuple[str, Dict[str, bytes]]:
+    """(content hash, {file name: content}) of those files."""
+    src = os.path.join(PKG_ROOT, "padpilot")
     h = hashlib.sha1()
     blobs = {}
-    for n in names:
+    for n in _package_files():
         with open(os.path.join(src, n), "rb") as f:
             blobs[n] = f.read()
         h.update(n.encode() + b"\0" + blobs[n] + b"\0")
+    return h.hexdigest()[:12], blobs
+
+
+def code_id() -> str:
+    """Names the code of this package by its content. The daemon reports the one it runs."""
+    return _package()[0]
+
+
+def _newest_mtime() -> float:
+    src = os.path.join(PKG_ROOT, "padpilot")
+    return max(os.stat(os.path.join(src, n)).st_mtime for n in _package_files())
+
+
+def _stage_package() -> str:
+    """Copy the padpilot package to $PADPILOT_HOME/runtime/<content hash>/ and return that root."""
+    digest, blobs = _package()
     runtime = C.HOME / "runtime"
-    root = runtime / h.hexdigest()[:12]
+    root = runtime / digest
     if not (root / "padpilot" / "__init__.py").exists():
         tmp = Path(tempfile.mkdtemp(prefix=".stage-", dir=str(C.HOME)))
         (tmp / "padpilot" / "fonts").mkdir(parents=True)
@@ -95,10 +118,83 @@ def _stage_package() -> str:
     return str(root)
 
 
-def start_daemon(wait: float = 2.0) -> bool:
-    """Start the daemon in the background if it is not already running."""
-    if request({"op": "ping"}, timeout=0.2):
+def _version(s) -> tuple:
+    try:
+        return tuple(int(x) for x in str(s).split("."))
+    except ValueError:
+        return ()
+
+
+def _outdated(ping: dict) -> bool:
+    """Does the running daemon run other, older code than this package? The daemon is started
+    once and then kept, so after a plugin update it would go on running the old code.
+
+    True when this package has a higher version, or the same version and files changed since
+    the daemon started. A daemon from before it reported its code is always older. A copy that
+    is neither newer nor changed never replaces a daemon (two copies in use at once must not
+    take turns restarting it), and nothing is replaced while it holds a permission request for
+    a button press."""
+    if ping.get("approvals"):
+        return False
+    if "code" not in ping:
         return True
+    mine, theirs = _version(__version__), _version(ping.get("version"))
+    if not (mine > theirs or (mine == theirs and _newest_mtime() > float(ping.get("started") or 0))):
+        return False
+    return code_id() != ping.get("code")
+
+
+def _importable() -> bool:
+    """Can the daemon's Python import this package's daemon? A half-saved edit or a broken
+    update must not take a working daemon down."""
+    root = PKG_ROOT
+    if sys.platform == "darwin":
+        try:
+            root = _stage_package()  # what would run: see _spawn_daemon
+        except OSError:
+            pass
+    env = dict(os.environ)
+    env["PYTHONPATH"] = root
+    try:
+        r = subprocess.run([daemon_python(), "-c", "import padpilot.daemon, padpilot.web"], env=env,
+                           cwd=str(C.HOME), capture_output=True, timeout=3)
+        ok, why = r.returncode == 0, r.stderr.decode(errors="replace")[-600:]
+    except (OSError, subprocess.SubprocessError) as e:
+        ok, why = False, repr(e)
+    if not ok:
+        try:
+            with open(C.HOME / "daemon.stderr", "a") as f:
+                f.write(f"padpilot: keeping the running daemon, the newer code does not import:\n{why}\n")
+        except OSError:
+            pass
+    return ok
+
+
+def start_daemon(wait: float = 2.0) -> bool:
+    """Start the daemon in the background if it is not running, and replace one that runs
+    older code than this package (see _outdated)."""
+    ping = request({"op": "ping"}, timeout=0.2)
+    if ping:
+        try:
+            stale = _outdated(ping)
+        except (OSError, ValueError, TypeError):
+            stale = False
+        if not stale or not _importable():
+            return True
+        request({"op": "shutdown"}, timeout=0.5)
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and request({"op": "ping"}, timeout=0.2):
+            time.sleep(0.05)
+    _spawn_daemon()
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if request({"op": "ping"}, timeout=0.2):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _spawn_daemon() -> None:
     C.ensure_home()
     venv_py = C.VENV_PATH / "bin" / "python3"
     # First run: build the venv (installs hidapi) and then become the daemon.
@@ -124,9 +220,3 @@ def start_daemon(wait: float = 2.0) -> bool:
                 stdin=devnull_in, stdout=err, stderr=err, env=env, cwd=str(C.HOME),
                 start_new_session=True, close_fds=True,
             )
-    deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
-        if request({"op": "ping"}, timeout=0.2):
-            return True
-        time.sleep(0.05)
-    return False

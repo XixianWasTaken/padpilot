@@ -24,6 +24,8 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
+from . import __version__
+from . import client
 from . import config as C
 from . import macos
 from . import transcript as T
@@ -203,6 +205,8 @@ class Daemon:
         self.preview: Optional[tuple] = None    # (light spec, since): the tutorial page shows a state
         self.ptt_sent: Dict[str, bool] = {}  # push-to-talk control -> its press was delivered
         self.started = time.monotonic()
+        self.started_at = time.time()
+        self.code = ""  # names the code this process runs (client.code_id); set by run_daemon
         self.question_submitted_at = 0.0  # when a question-box page was last submitted
         # `padpilot run` sessions: the wrapped agent's own session id, and the agents started
         # inside it as (wrapper id, session id). See _nested_event.
@@ -1237,6 +1241,8 @@ class Daemon:
                               "context": None if s.context is None else round(s.context, 3)}
                              for s in self.sessions.values()],
                 "pending_approvals": len(self.approvals),
+                "version": __version__,
+                "code": self.code,
                 "desktop": self.desktop_status(),
                 "keybindings": self.resolver.describe(),
                 "pid": os.getpid(),
@@ -1328,8 +1334,18 @@ def _serve_conn(d: Daemon, conn: socket.socket) -> None:
             elif op == "shutdown":
                 reply({"ok": True})
                 d.running = False
+                try:  # wake the accept loop, so stopping does not wait for its timeout
+                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    s.settimeout(0.2)
+                    s.connect(str(C.SOCKET_PATH))
+                    s.close()
+                except OSError:
+                    pass
             elif op == "ping":
-                reply({"ok": True, "pid": os.getpid()})
+                # A client with newer code replaces this daemon (client.start_daemon); it goes
+                # by the code and start time reported here, and waits while a request is held.
+                reply({"ok": True, "pid": os.getpid(), "version": __version__, "code": d.code,
+                       "started": d.started_at, "approvals": len(d.approvals)})
     except OSError:
         pass
     finally:
@@ -1377,6 +1393,10 @@ def run_daemon(foreground: bool = False) -> int:
         log.error("python 'hidapi' module missing (%s); run `padpilot setup`", e)
         hid = None
     d = Daemon(C.load_config(), hid)
+    try:
+        d.code = client.code_id()
+    except OSError:
+        pass
 
     if C.SOCKET_PATH.exists():
         C.SOCKET_PATH.unlink()

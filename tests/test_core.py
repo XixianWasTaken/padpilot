@@ -1380,6 +1380,80 @@ class InteractionTest(unittest.TestCase):
             p.unlink()
 
 
+class DaemonUpdateTest(unittest.TestCase):
+    """client.start_daemon replaces a daemon that runs older code than this package."""
+
+    NAMES = ("code_id", "_newest_mtime", "__version__", "request", "_spawn_daemon", "_importable", "PKG_ROOT")
+
+    def setUp(self):
+        from padpilot import client
+        self.c = client
+        self.saved = {k: getattr(client, k) for k in self.NAMES}
+        client.code_id = lambda: "new"
+        client._newest_mtime = lambda: 1000.0
+        client.__version__ = "0.4.1"
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(self.c, k, v)
+
+    def test_which_running_daemon_is_outdated(self):
+        old = self.c._outdated
+        same = {"ok": True, "pid": 1, "version": "0.4.1", "code": "new", "started": 2000.0, "approvals": 0}
+        self.assertFalse(old(same))
+        self.assertTrue(old({"ok": True, "pid": 1}))  # from before daemons reported their code
+        self.assertTrue(old(dict(same, code="old", version="0.4.0")))  # a plugin update
+        self.assertFalse(old(dict(same, code="other", version="0.5.0")))  # never back to older code
+        self.assertTrue(old(dict(same, code="old", started=500.0)))  # files changed since it started
+        self.assertFalse(old(dict(same, code="other")))  # another copy, not newer: no taking turns
+        self.assertFalse(old(dict(same, code="new", started=500.0)))  # touched, same content
+        self.assertFalse(old(dict(same, code="old", version="0.4.0", approvals=1)))  # a request is held
+
+    def test_an_outdated_daemon_is_replaced_if_the_new_code_imports(self):
+        c, calls = self.c, []
+        daemon = {"reply": {"ok": True, "pid": 1}}  # an old daemon is running
+
+        def request(msg, timeout=0.5, wait_reply=True):
+            calls.append(msg["op"])
+            if msg["op"] == "shutdown":
+                daemon["reply"] = None
+                return {"ok": True}
+            return daemon["reply"]
+
+        def spawn():
+            calls.append("spawn")
+            daemon["reply"] = {"ok": True, "pid": 2, "version": "0.4.1", "code": "new", "started": 2000.0}
+        c.request, c._spawn_daemon = request, spawn
+        c._importable = lambda: False  # a half-saved edit: the working daemon stays
+        self.assertTrue(c.start_daemon(wait=0.5))
+        self.assertEqual(set(calls), {"ping"})
+        c._importable = lambda: True
+        self.assertTrue(c.start_daemon(wait=0.5))
+        self.assertEqual([x for x in calls if x != "ping"], ["shutdown", "spawn"])
+        del calls[:]
+        self.assertTrue(c.start_daemon(wait=0.5))  # up to date now: left alone
+        self.assertEqual(calls, ["ping"])
+        daemon["reply"] = None  # not running at all: started, as always
+        self.assertTrue(c.start_daemon(wait=0.5))
+        self.assertEqual(calls[-2:], ["spawn", "ping"])
+
+    def test_staged_code_reports_the_same_id_and_is_checked_before_use(self):
+        c = self.c
+        c.code_id = self.saved["code_id"]
+        root = c._stage_package()
+        self.assertEqual(os.path.basename(root), c.code_id())
+        self.assertTrue(c._importable())  # this package's daemon imports from its staged copy
+        c.PKG_ROOT = root  # the daemon runs the staged copy and reports its id from there
+        self.assertEqual(c.code_id(), os.path.basename(root))
+        broken = Path(tempfile.mkdtemp(prefix="padpilot-broken-"))
+        (broken / "padpilot").mkdir()
+        (broken / "padpilot" / "__init__.py").write_text("")
+        (broken / "padpilot" / "daemon.py").write_text("def (:\n")
+        c.PKG_ROOT = str(broken)
+        self.assertFalse(c._importable())
+        self.assertIn("does not import", (C.HOME / "daemon.stderr").read_text())
+
+
 class HookTest(unittest.TestCase):
     def run_hook(self, payload):
         from padpilot import hook
