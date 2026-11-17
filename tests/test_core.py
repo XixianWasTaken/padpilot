@@ -1715,7 +1715,8 @@ class InteractionTest(unittest.TestCase):
 class DaemonUpdateTest(unittest.TestCase):
     """client.start_daemon replaces a daemon that runs older code than this package."""
 
-    NAMES = ("code_id", "_newest_mtime", "__version__", "request", "_spawn_daemon", "_importable", "PKG_ROOT")
+    NAMES = ("code_id", "_newest_mtime", "__version__", "request", "_spawn_daemon", "_importable", "PKG_ROOT",
+             "daemon_alive")
 
     def setUp(self):
         from padpilot import client
@@ -1768,6 +1769,54 @@ class DaemonUpdateTest(unittest.TestCase):
         daemon["reply"] = None  # not running at all: started, as always
         self.assertTrue(c.start_daemon(wait=0.5))
         self.assertEqual(calls[-2:], ["spawn", "ping"])
+
+    def test_a_new_daemon_is_not_started_while_the_old_one_is_still_exiting(self):
+        # A daemon stops answering before it has closed the controller and let go of its lock.
+        # A new one started in between finds it "already running" and gives up: none is left.
+        c, calls = self.c, []
+        old = {"answers": True, "exiting": 0}
+
+        def request(msg, timeout=0.5, wait_reply=True):
+            if msg["op"] == "shutdown":
+                old.update(answers=False, exiting=4)  # silent from now on, but still there
+                return {"ok": True}
+            return {"ok": True, "pid": 1} if old["answers"] else None
+
+        def alive():
+            calls.append("alive?")
+            old["exiting"] -= 1
+            return old["exiting"] > 0
+
+        def spawn():
+            calls.append("spawn")
+            old["answers"] = True
+        c.request, c._spawn_daemon, c._importable, c.daemon_alive = request, spawn, lambda: True, alive
+        self.assertTrue(c.start_daemon(wait=0.5))
+        self.assertEqual(calls, ["alive?"] * 4 + ["spawn"])
+
+    @unittest.skipIf(os.name == "nt", "the daemon's lock is a flock")
+    def test_a_daemon_that_is_shutting_down_still_counts_as_there(self):
+        import fcntl
+        import threading
+        from padpilot.daemon import _acquire_singleton
+        c = self.c
+        self.assertFalse(c.daemon_alive())  # nobody holds the lock (or there is no pid file yet)
+        fd = _acquire_singleton()  # what a daemon holds from its start to its exit
+        try:
+            self.assertTrue(c.daemon_alive())
+            self.assertFalse(c.wait_gone(0.2))
+            self.assertIsNone(_acquire_singleton())  # a second daemon gives up ...
+            threading.Timer(0.3, lambda: fcntl.flock(fd, fcntl.LOCK_UN)).start()  # (the first one exits)
+            t = time.monotonic()
+            fd2 = _acquire_singleton(wait=3.0)  # ... unless it waits a moment, as run_daemon does
+            self.assertIsNotNone(fd2)
+            self.assertLess(time.monotonic() - t, 2.0)
+            self.assertEqual(Path(C.PID_PATH).read_text(), str(os.getpid()))
+            os.close(fd2)
+        finally:
+            os.close(fd)
+        self.assertFalse(c.daemon_alive())
+        self.assertTrue(c.wait_gone(0.2))
 
     def test_staged_code_reports_the_same_id_and_is_checked_before_use(self):
         c = self.c

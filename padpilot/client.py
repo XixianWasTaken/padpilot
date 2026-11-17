@@ -51,6 +51,36 @@ def request(msg: dict, timeout: float = 0.5, wait_reply: bool = True) -> Optiona
         s.close()
 
 
+def daemon_alive() -> bool:
+    """Is there a daemon process? It holds a lock on its pid file from start to exit, so this
+    also sees one that no longer answers because it is shutting down: closing the controller
+    and the tutorial page's server takes it a moment."""
+    try:
+        import fcntl
+        fd = os.open(C.PID_PATH, os.O_RDWR)
+    except (ImportError, OSError):
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def wait_gone(timeout: float) -> bool:
+    """Wait for a daemon that was told to stop to exit. False if it is still there after
+    `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while daemon_alive() or request({"op": "ping"}, timeout=0.2):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
 def daemon_python() -> str:
     """The daemon needs hidapi, which lives in our venv."""
     venv_py = C.VENV_PATH / "bin" / "python3"
@@ -182,9 +212,10 @@ def start_daemon(wait: float = 2.0) -> bool:
         if not stale or not _importable():
             return True
         request({"op": "shutdown"}, timeout=0.5)
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and request({"op": "ping"}, timeout=0.2):
-            time.sleep(0.05)
+        # It stops answering before it has exited. A new daemon started in between finds it
+        # "already running" and gives up, and then there is none at all. (Not longer than
+        # this: a hook has 5 seconds. The new daemon waits a little for the lock itself.)
+        wait_gone(3.0)
     _spawn_daemon()
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:

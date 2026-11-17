@@ -1511,21 +1511,30 @@ def _serve_conn(d: Daemon, conn: socket.socket) -> None:
             pass
 
 
-def _acquire_singleton():
+def _acquire_singleton(wait: float = 0.0):
+    """The lock that makes this the only daemon, held until the process exits; None if another
+    process has it. `wait`: keep trying for that long. A daemon that was told to stop holds it
+    until it has closed the controller, and a client looking for a daemon holds it for an
+    instant (client.daemon_alive)."""
     C.ensure_home()
-    fd = os.open(C.PID_PATH, os.O_RDWR | os.O_CREAT, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        os.close(fd)
-        return None
-    os.ftruncate(fd, 0)
-    os.write(fd, str(os.getpid()).encode())
-    return fd
+    deadline = time.monotonic() + wait
+    while True:
+        fd = os.open(C.PID_PATH, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(fd)
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.1)
+            continue
+        os.ftruncate(fd, 0)
+        os.write(fd, str(os.getpid()).encode())
+        return fd
 
 
 def run_daemon(foreground: bool = False) -> int:
-    lock_fd = _acquire_singleton()
+    lock_fd = _acquire_singleton(wait=3.0)
     if lock_fd is None:
         print("padpilot daemon already running")
         return 0

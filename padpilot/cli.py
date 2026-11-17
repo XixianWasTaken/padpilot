@@ -68,10 +68,9 @@ def main(argv=None) -> int:
         return 0 if ok else 1
     if cmd == "stop":
         r = client.request({"op": "shutdown"})
-        # Wait until the old daemon stops answering, so a `start` right after really starts one.
-        deadline = time.monotonic() + 5
-        while r and time.monotonic() < deadline and client.request({"op": "ping"}, timeout=0.2):
-            time.sleep(0.1)
+        # Wait until the old daemon has exited, so a `start` right after really starts one.
+        if r:
+            client.wait_gone(5.0)
         print("stopped" if r else "not running")
         return 0
     if cmd == "status":
