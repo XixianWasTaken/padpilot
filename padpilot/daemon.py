@@ -1027,26 +1027,40 @@ class Daemon:
             return max(self.sessions.values(), key=lambda s: s.updated)
         return None
 
+    def _tidy(self, now: float) -> None:
+        """Housekeeping that has to happen whether a controller is connected or not: drop the
+        sessions that went away without saying so, reset the states that are stuck, forget the
+        flashes that are over. (Call with the lock held.)"""
+        # Hook-only sessions can miss SessionEnd (crash, Ctrl+C); expire them. A finished one
+        # waits for you ("done" stays until a button press, its card until it is used), so
+        # it is kept much longer.
+        for k in [k for k, s in self.sessions.items()
+                  if not any(t.id == k for t in self.targets) and now - s.updated > (
+                      STALE_KEPT_S if s.state == "done" or s.replies() else STALE_SESSION_S)]:
+            del self.sessions[k]
+        for s in self.sessions.values():
+            if s.state in ("thinking", "tool", "compacting") and now - s.updated > STUCK_BUSY_S:
+                self.set_state(s, "idle", now)
+            spec = self.cfg["states"].get(s.state, {})
+            if spec.get("decay_to") and now - s.since > spec.get("decay_s", 20):
+                self.set_state(s, spec["decay_to"], now)
+        self.flashes = [f for f in self.flashes if now - f.start < f.dur]
+
+    def tidy(self, now: float) -> None:
+        with self.lock:
+            self._tidy(now)
+
     def frame(self, now: float) -> OutputState:
         with self.lock:
-            # Hook-only sessions can miss SessionEnd (crash, Ctrl+C); expire them. A finished one
-            # waits for you ("done" stays until a button press, its card until it is used), so
-            # it is kept much longer.
-            for k in [k for k, s in self.sessions.items()
-                      if not any(t.id == k for t in self.targets) and now - s.updated > (
-                          STALE_KEPT_S if s.state == "done" or s.replies() else STALE_SESSION_S)]:
-                del self.sessions[k]
-            # Decay and repeat-rumble bookkeeping.
+            self._tidy(now)
+            # Reminders and repeated rumbles are only worth giving while there is a controller
+            # to give them on, so they are part of the frame.
             for s in self.sessions.values():
-                if s.state in ("thinking", "tool", "compacting") and now - s.updated > STUCK_BUSY_S:
-                    self.set_state(s, "idle", now)
                 spec = self.cfg["states"].get(s.state, {})
                 remind = float(self.cfg.get("done_reminder_s") or 0)
                 if s.state == "done" and remind and not s.reminded and now - s.since >= remind:
                     s.reminded = True
                     self._flash("done_reminder")
-                if spec.get("decay_to") and now - s.since > spec.get("decay_s", 20):
-                    self.set_state(s, spec["decay_to"], now)
                 rep = spec.get("repeat_rumble_s")
                 if rep and s.rumbles < spec.get("repeat_max", 1) and now - s.last_rumble >= rep:
                     self._play(spec.get("rumble"))
@@ -1197,9 +1211,14 @@ class Daemon:
         last_sig = None
         last_write = 0.0
         last_status = 0.0
+        last_tidy = 0.0
         while self.running:
             now = time.monotonic()
             if self.dev is None:
+                # No controller, so no frames: the housekeeping a frame starts with is still due.
+                if now - last_tidy >= 1.0:
+                    last_tidy = now
+                    self._guarded(self.tidy, now)
                 if now - last_try < 2.0 or self.hid is None:
                     time.sleep(0.2)
                     continue

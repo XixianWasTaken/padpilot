@@ -596,6 +596,31 @@ class DaemonLogicTest(unittest.TestCase):
         self.d.detach("w-y")
         self.assertEqual(self.d.targets, [])
 
+    def test_housekeeping_does_not_need_a_controller(self):
+        import threading
+        self.ev("UserPromptSubmit")
+        s = self.d.sessions["claude:s1"]
+        for _ in range(50):  # every tool call adds a flash
+            self.d._flash("tool_start")
+        s.updated = time.monotonic() - 11 * 60  # no event for 11 minutes
+        th = threading.Thread(target=self.d.device_loop, daemon=True)  # no controller: no frame is drawn
+        th.start()
+        try:
+            for _ in range(60):
+                if s.state == "idle" and not self.d.flashes:
+                    break
+                time.sleep(0.05)
+            self.assertEqual((s.state, self.d.flashes), ("idle", []))
+            s.updated = time.monotonic() - 31 * 60
+            for _ in range(60):
+                if "claude:s1" not in self.d.sessions:
+                    break
+                time.sleep(0.05)
+            self.assertNotIn("claude:s1", self.d.sessions)
+        finally:
+            self.d.running = False
+            th.join(2)
+
     def test_controls_go_to_focused_wrapper(self):
         a, b = FakeConn(), FakeConn()
         self.d.attach(Target("w-a", "claude", "a", a))
