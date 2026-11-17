@@ -183,7 +183,8 @@ class Approval:
 
 class Daemon:
     def __init__(self, cfg: dict, hid_module=None, desktop=None, mic_probe=None, resolver=None,
-                 settings_path=None, speak=None, desktop_focus=None, desktop_question=None):
+                 settings_path=None, speak=None, desktop_focus=None, desktop_question=None,
+                 keyboard_idle=None):
         self.cfg = cfg
         # Spoken cues on the controller speaker; tests pass a fake (then USB is not required).
         self.speak_any = speak is not None
@@ -202,6 +203,9 @@ class Daemon:
         # Moves focus to the app's message box (bundle id -> what happened); tests pass a fake.
         self.desktop_focus = desktop_focus or (None if self.desktop_fake else macos.focus_message_box)
         self.desktop_focus_note = ""  # last result, for the log only when it changes
+        # Seconds since keyboard or mouse were last used (None: unknown); tests pass a fake.
+        self.keyboard_idle = keyboard_idle or ((lambda: None) if self.desktop_fake else macos.keyboard_idle_s)
+        self.last_input = -1e12  # when the real controller was last pressed
         self.desktop_q: Optional[queue.Queue] = None
         self.desktop_warned = False
         self.lock = threading.RLock()
@@ -630,6 +634,9 @@ class Daemon:
             # Practice mode answers no real request either (see handle_control).
             if self.dev is None or timeout <= 0 or self.locked or self.practice is not None:
                 return None  # the on-screen dialog takes it
+            if not self._pad_in_use():
+                log.info("permission request not held: the controller is not what is being used")
+                return None
             a = Approval(key, (msg.get("data") or {}).get("tool_name", ""))
             self.approvals.append(a)
         a.event.wait(timeout)
@@ -642,6 +649,20 @@ class Daemon:
         return a.decision
 
     # ------------------------------------------------------------ input
+    def _pad_in_use(self) -> bool:
+        """Is the controller what the user is working with? Only then is a permission request
+        held for a button press: someone at the keyboard, with the controller merely plugged
+        in, would wait for the dialog for nothing. Yes if it was pressed lately, or if it is
+        what was touched last, however long ago (watching a long turn from the couch)."""
+        window = float(self.cfg.get("hook_approval_pad_idle_s", 300))
+        if window <= 0:
+            return True
+        idle = time.monotonic() - self.last_input
+        if idle <= window:
+            return True
+        other = self.keyboard_idle()
+        return other is not None and idle < other
+
     def _grace(self) -> float:
         """Seconds after a permission request appears in which a press cannot answer it: such a
         press was already on its way to something else."""
@@ -1211,6 +1232,8 @@ class Daemon:
     def _handle_input(self, st, now: float) -> None:
         names = self._guarded(self.tracker.update, st, now) or []
         raw, self.tracker.raw = self.tracker.raw, []
+        if names or raw:
+            self.last_input = now  # a press on the controller itself: it is in use
         if self.watchers:
             with self.lock:
                 for n, down, held in raw:
@@ -1314,6 +1337,7 @@ class Daemon:
                               "context": None if s.context is None else round(s.context, 3)}
                              for s in self.sessions.values()],
                 "pending_approvals": len(self.approvals),
+                "pad_idle_s": None if self.last_input < 0 else round(time.monotonic() - self.last_input, 1),
                 "version": __version__,
                 "code": self.code,
                 "desktop": self.desktop_status(),

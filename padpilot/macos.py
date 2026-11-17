@@ -69,6 +69,8 @@ class _Quartz:
         cg.CGEventKeyboardSetUnicodeString.argtypes = [c_void_p, c_ulong, POINTER(c_uint16)]
         cg.CGEventPost.argtypes = [c_uint32, c_void_p]
         cg.CGEventPostToPid.argtypes = [c_int, c_void_p]
+        cg.CGEventSourceSecondsSinceLastEventType.restype = ctypes.c_double
+        cg.CGEventSourceSecondsSinceLastEventType.argtypes = [ctypes.c_int32, c_uint32]
         cf.CFRelease.argtypes = [c_void_p]
         ax.AXIsProcessTrusted.restype = c_bool
         ax.AXIsProcessTrustedWithOptions.restype = c_bool
@@ -310,6 +312,21 @@ def post_items(items: List[dict], gap_ms: int = 90, bundle_id: Optional[str] = N
         else:
             q.key(it["key"], pid)
     return True
+
+
+def keyboard_idle_s() -> Optional[float]:
+    """Seconds since the keyboard, mouse or trackpad was last used; None if that cannot be told.
+    The controller does not count (the daemon keeps it to itself), and neither do the keys the
+    daemon posts: they go to one process and never enter the session's input, which is what is
+    read here. (The "hardware" state looks like the one to read, but those posts reset it:
+    measured.)"""
+    q = quartz()
+    if q is None:
+        return None
+    try:
+        return float(q.cg.CGEventSourceSecondsSinceLastEventType(0, 0xFFFFFFFF))  # session state, any input
+    except (OSError, AttributeError, ValueError):
+        return None
 
 
 def frontmost_bundle_id() -> Optional[str]:

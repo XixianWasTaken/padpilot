@@ -659,6 +659,7 @@ class DaemonLogicTest(unittest.TestCase):
     def test_hook_approval(self):
         import threading
         self.d.dev = object()  # pretend a controller is connected
+        self.d.last_input = time.monotonic()  # ... and in use
         result = {}
         th = threading.Thread(target=lambda: result.update(
             d=self.d.request_approval({"source": "claude", "session": "s9", "timeout": 5, "data": {}})))
@@ -678,6 +679,7 @@ class DaemonLogicTest(unittest.TestCase):
         """Start a hook approval request in a thread; returns (thread, result dict)."""
         import threading
         d = d or self.d
+        d.last_input = time.monotonic()  # the controller is in use
         result = {}
         th = threading.Thread(target=lambda: result.update(
             d=d.request_approval({"source": "claude", "session": "s9", "timeout": timeout, "data": {}})))
@@ -687,6 +689,39 @@ class DaemonLogicTest(unittest.TestCase):
                 break
             time.sleep(0.005)
         return th, result
+
+    def test_a_request_is_held_only_while_the_controller_is_in_use(self):
+        self.d.dev = object()
+        other = [None]  # seconds since keyboard or mouse were used; None: cannot be told
+        self.d.keyboard_idle = lambda: other[0]
+
+        def held():
+            t = time.monotonic()
+            self.d.request_approval({"source": "claude", "session": "s9", "timeout": 0.3, "data": {}})
+            return time.monotonic() - t > 0.25
+        self.assertFalse(held())  # plugged in, never touched: the dialog comes at once
+        self.d.last_input = time.monotonic() - 60  # pressed a minute ago
+        self.assertTrue(held())
+        self.d.last_input = time.monotonic() - 1200  # 20 minutes ago ...
+        other[0] = 30.0  # ... and the keyboard since: at the computer
+        self.assertFalse(held())
+        other[0] = 3000.0  # ... and nothing else since: still on the couch, watching a long turn
+        self.assertTrue(held())
+        other[0] = None  # where that cannot be told, only the time counts
+        self.assertFalse(held())
+        self.d.cfg["hook_approval_pad_idle_s"] = 0  # 0: always held
+        self.assertTrue(held())
+        # A press on the controller counts as use; a scripted one does not.
+        self.d.cfg["hook_approval_pad_idle_s"] = 300
+        self.d.last_input = -1e12
+        self.d.handle_control("ps", injected=True)
+        self.assertFalse(held())
+        st = InputState()
+        st.buttons["ps"] = True
+        self.d._handle_input(st, time.monotonic())
+        self.assertTrue(held())
+        self.d.dev = None  # (status() reads the real controller's transport)
+        self.assertLess(self.d.status()["pad_idle_s"], 2)
 
     def test_a_press_made_as_the_request_appears_does_not_answer_it(self):
         self.d.dev = object()

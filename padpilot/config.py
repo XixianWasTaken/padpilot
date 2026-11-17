@@ -150,6 +150,10 @@ DEFAULTS = {
     # e.g. Claude desktop / IDE). The hook waits this long for a button, then falls back
     # to the normal on-screen dialog. 0 disables hook approvals.
     "hook_approval_timeout_s": 45,
+    # ... but only while you are using the controller: it was pressed within this many seconds,
+    # or it is what you touched last (no keyboard, mouse or trackpad since). Otherwise you are
+    # at the computer, and the dialog appears at once. 0: always wait, whatever you are using.
+    "hook_approval_pad_idle_s": 300,
     # R3 (retry) is refused while the session sent an event within this many seconds: it is
     # still running, maybe in another window.
     "retry_live_s": 8,

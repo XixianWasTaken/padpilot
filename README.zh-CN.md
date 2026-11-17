@@ -51,7 +51,7 @@ alias cc='padpilot run claude'
 alias cx='padpilot run codex'
 ```
 
-不经过 `padpilot run` 也能用（比如 Claude 桌面端、IDE）：灯效和震动照常工作，**权限审批改由 hook 处理**，具体见下方的「审批」一节。在 macOS 上，按键还能直接操作 **Claude 桌面 app**，见「桌面 app」一节。
+不经过 `padpilot run` 也能用（比如 Claude 桌面端、IDE）：灯效和震动照常工作，**权限审批改由 hook 处理**，具体见下方的「审批」一节。没有人值守的后台任务（`claude -p`、脚本调用的 agent）不会驱动手柄。在 macOS 上，按键还能直接操作 **Claude 桌面 app**，见「桌面 app」一节。
 
 ## 灯效 / 震动 / 扳机
 
@@ -193,6 +193,7 @@ Claude 桌面端、IDE 或直接运行的 `claude` / `codex` 没有 PTY 可以�
 - ○ 或 L2：**拒绝**，拒绝消息会返回给 agent
 - △：交回屏幕上的对话框处理
 - 超时，或手柄没连接：直接显示正常的对话框
+- 只有在你用手柄的时候才会等：最近 5 分钟按过手柄，或者你最后碰的是手柄（之后没动过键盘鼠标）。否则说明你在电脑前，直接显示对话框（`hook_approval_pad_idle_s`，设为 `0` 则总是等）
 - 请求出现后 0.6 秒内（`approval_grace_ms`）按的 ✕ / ○ 不算数，手柄短震两下，再按一次
 - 练习模式下不等手柄，直接显示对话框
 - `padpilot press` 和 `padpilot send` 不能回答权限请求，只有真手柄可以
@@ -276,8 +277,8 @@ padpilot uninstall-codex
 
 所有东西都在你自己的电脑上运行。padpilot 没有服务器，不收集使用数据，会话里的任何内容都不会离开这台电脑。完整列表：
 
-- **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字；弹出提问框时，带上选项文字和是否多选（不带问题本身）。
-- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。提问框的权限请求不会被拦下等待，直接在提问框里回答。请求出现后 0.6 秒内（`approval_grace_ms`）的按键不算回答；`padpilot run` 会话里刚弹出的确认框，这段时间内也不接受回车。练习模式下不拦请求。`padpilot press` 和 `padpilot send` 不能回答权限请求。
+- **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字；弹出提问框时，带上选项文字和是否多选（不带问题本身）。每条消息还带上会话在哪里运行，这是 Claude Code 告诉 hook 的：入口（桌面 app、终端、编辑器）和有没有人值守。没有人值守的会话，hook 什么都不发，除非打开 `background_sessions`。
+- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。只有在用手柄的时候才会拦下请求（`hook_approval_pad_idle_s`）；为了分辨你是不是在电脑前，守护进程会读取键盘鼠标多久没动过，这是系统记的一个数字，不是你打的内容。提问框的权限请求不会被拦下等待，直接在提问框里回答。请求出现后 0.6 秒内（`approval_grace_ms`）的按键不算回答；`padpilot run` 会话里刚弹出的确认框，这段时间内也不接受回车。练习模式下不拦请求。`padpilot press` 和 `padpilot send` 不能回答权限请求。
 - **守护进程**：第一个 hook 会启动一个后台进程，通过 USB 或蓝牙（HID）打开手柄。4 小时没有活动会自动退出（`idle_shutdown_minutes`），也可以用 `padpilot stop` 停掉。插件的代码比 daemon 正在运行的新时（比如更新之后），下一次会话开始、发送消息或权限请求会自动换成新的 daemon；新代码加载不了的话就不换。换过之后，它不记得各会话之前的卡片和上一条消息。
 - **唯一一次下载**：第一次需要守护进程时，padpilot 会创建 `~/.padpilot/venv`，并用 pip 从 PyPI 安装 `hidapi==0.15.0`。这是 padpilot 唯一会下载的东西。
 - **读取的文件**：
