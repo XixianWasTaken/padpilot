@@ -204,6 +204,10 @@ class Daemon:
         self.ptt_sent: Dict[str, bool] = {}  # push-to-talk control -> its press was delivered
         self.started = time.monotonic()
         self.question_submitted_at = 0.0  # when a question-box page was last submitted
+        # `padpilot run` sessions: the wrapped agent's own session id, and the agents started
+        # inside it as (wrapper id, session id). See _nested_event.
+        self.wrapper_owner: Dict[str, str] = {}
+        self.nested: set = set()
 
     # ------------------------------------------------------------ helpers
     def _mapping_for(self, target: Optional[Target]) -> dict:
@@ -417,6 +421,8 @@ class Daemon:
         label = os.path.basename(msg.get("cwd") or "") or source
         with self.lock:
             self.last_activity = time.monotonic()
+            if msg.get("wrapper") and self._nested_event(msg["wrapper"], msg.get("session") or "", ev, data):
+                return  # an agent started inside a `padpilot run` session: not that session's event
             if ev == "SessionEnd":
                 self.sessions.pop(key, None)
                 return
@@ -512,6 +518,33 @@ class Daemon:
                 self.set_state(s, "idle")
             elif ev == "AgentTurnComplete":  # codex `notify`
                 self.set_state(s, "done")
+
+    def _nested_event(self, wid: str, sid: str, ev: str, data: dict) -> bool:
+        """An event carries the id of the `padpilot run` session it comes from, and an agent
+        that session starts itself (`claude -p` from its shell tool) inherits that id. True
+        for such a nested agent's events, which must not change the wrapped session.
+
+        The wrapped agent's own session id is the first one seen. A fresh start under another
+        id while it is in the middle of a turn is its child. Any other new id is taken to be
+        the wrapped agent itself moving on (/clear, /resume, a restart), as before."""
+        if not sid:
+            return False
+        if (wid, sid) in self.nested:
+            if ev == "SessionEnd":
+                self.nested.discard((wid, sid))
+            return True
+        owner = self.wrapper_owner.get(wid)
+        if owner == sid:
+            if ev == "SessionEnd":
+                self.wrapper_owner.pop(wid, None)
+            return False
+        s = self.sessions.get(wid)
+        if (owner is not None and ev == "SessionStart" and data.get("source") == "startup"
+                and s is not None and s.state in BUSY):
+            self.nested.add((wid, sid))
+            return True
+        self.wrapper_owner[wid] = sid
+        return False
 
     def _attention(self, s: Session, key: str) -> None:
         self.set_state(s, "permission")
@@ -909,6 +942,8 @@ class Daemon:
         with self.lock:
             self.targets = [x for x in self.targets if x.id != tid]
             self.sessions.pop(tid, None)
+            self.wrapper_owner.pop(tid, None)
+            self.nested = {p for p in self.nested if p[0] != tid}
             if self.focus == tid:
                 self.focus = self.targets[-1].id if self.targets else None
             self.last_activity = time.monotonic()

@@ -424,6 +424,42 @@ class DaemonLogicTest(unittest.TestCase):
         self.d.frame(s.updated + 13 * 3600)  # but not for ever
         self.assertNotIn("claude:s1", self.d.sessions)
 
+    def test_an_agent_started_inside_a_wrapped_session_is_not_that_session(self):
+        self.d.attach(Target("w-a", "claude", "a", FakeConn()))
+
+        def ev(event, session, **data):
+            self.d.handle_event({"op": "event", "source": "claude", "event": event, "session": session,
+                                 "cwd": "/tmp/proj", "wrapper": "w-a", "data": data})
+        ev("SessionStart", "outer", source="startup")
+        ev("UserPromptSubmit", "outer", prompt="the real task")
+        ev("PreToolUse", "outer", tool_name="Bash")  # it runs `claude -p ...`, which inherits the wrapper id
+        ev("SessionStart", "inner", source="startup")
+        ev("UserPromptSubmit", "inner", prompt="nested prompt")
+        ev("PreToolUse", "inner", tool_name="Read")
+        ev("Stop", "inner")
+        ev("SessionEnd", "inner")
+        s = self.d.sessions["w-a"]
+        self.assertEqual((s.state, s.last_prompt, s.tools), ("tool", "the real task", 1))
+        ev("PostToolUse", "outer", tool_name="Bash")
+        ev("Stop", "outer")
+        self.assertEqual(s.state, "done")
+        # The wrapped agent itself changing session id is followed: /clear ...
+        ev("SessionEnd", "outer", reason="clear")
+        ev("SessionStart", "outer2", source="clear")
+        ev("UserPromptSubmit", "outer2", prompt="after clear")
+        self.assertEqual(self.d.sessions["w-a"].state, "thinking")
+        # ... /resume, even in the middle of a turn ...
+        ev("SessionStart", "outer3", source="resume")
+        ev("UserPromptSubmit", "outer3", prompt="resumed")
+        self.assertEqual(self.d.sessions["w-a"].last_prompt, "resumed")
+        # ... and a fresh start while the session rests (the agent was restarted in its shell).
+        ev("Stop", "outer3")
+        ev("SessionStart", "outer4", source="startup")
+        ev("UserPromptSubmit", "outer4", prompt="restarted")
+        self.assertEqual(self.d.sessions["w-a"].last_prompt, "restarted")
+        self.d.detach("w-a")
+        self.assertEqual((self.d.wrapper_owner, self.d.nested), ({}, set()))
+
     def test_controls_go_to_focused_wrapper(self):
         a, b = FakeConn(), FakeConn()
         self.d.attach(Target("w-a", "claude", "a", a))
