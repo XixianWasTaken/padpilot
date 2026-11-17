@@ -68,6 +68,7 @@ class _Quartz:
         cg.CGEventSetFlags.argtypes = [c_void_p, c_uint64]
         cg.CGEventKeyboardSetUnicodeString.argtypes = [c_void_p, c_ulong, POINTER(c_uint16)]
         cg.CGEventPost.argtypes = [c_uint32, c_void_p]
+        cg.CGEventPostToPid.argtypes = [c_int, c_void_p]
         cf.CFRelease.argtypes = [c_void_p]
         ax.AXIsProcessTrusted.restype = c_bool
         ax.AXIsProcessTrustedWithOptions.restype = c_bool
@@ -93,7 +94,8 @@ class _Quartz:
         finally:
             self.cf.CFRelease(d)
 
-    def _post(self, code: int, flags: int, down: bool, text: Optional[str] = None) -> None:
+    def _post(self, code: int, flags: int, down: bool, text: Optional[str] = None,
+              pid: Optional[int] = None) -> None:
         ev = self.cg.CGEventCreateKeyboardEvent(None, code, down)
         if not ev:
             raise OSError("CGEventCreateKeyboardEvent failed")
@@ -103,20 +105,33 @@ class _Quartz:
                 units = text.encode("utf-16-le")
                 buf = (c_uint16 * (len(units) // 2)).from_buffer_copy(units)
                 self.cg.CGEventKeyboardSetUnicodeString(ev, len(buf), buf)
-            self.cg.CGEventPost(0, ev)  # kCGHIDEventTap
+            if pid:
+                # To that process alone: a key posted system-wide goes to whatever app is in
+                # front when it arrives, which need not be the one that was in front a moment ago.
+                self.cg.CGEventPostToPid(pid, ev)
+            else:
+                self.cg.CGEventPost(0, ev)  # kCGHIDEventTap
         finally:
             self.cf.CFRelease(ev)
 
-    def key(self, name: str) -> None:
+    def key(self, name: str, pid: Optional[int] = None) -> None:
         code, flags = layout_key_event(name)
-        self._post(code, flags, True)
-        self._post(code, flags, False)
+        self._post(code, flags, True, pid=pid)
+        self._post(code, flags, False, pid=pid)
 
-    def text(self, s: str) -> None:
-        for chunk in utf16_chunks(s):
-            self._post(0, 0, True, chunk)
-            self._post(0, 0, False, chunk)
+    def text(self, s: str, pid: Optional[int] = None, ok=None) -> bool:
+        """Type `s`. A long text takes seconds: `ok` is asked every TEXT_CHECK chunks, and when
+        it says no the rest is not typed and the result is False."""
+        for n, chunk in enumerate(utf16_chunks(s)):
+            if ok is not None and n and n % TEXT_CHECK == 0 and not ok():
+                return False
+            self._post(0, 0, True, chunk, pid)
+            self._post(0, 0, False, chunk, pid)
             time.sleep(0.005)
+        return True
+
+
+TEXT_CHECK = 40  # chunks of typed text (about a quarter of a second) between two looks at what is in front
 
 
 def utf16_chunks(s: str, limit: int = 16) -> List[str]:
@@ -273,18 +288,28 @@ def accessibility_trusted(prompt: bool = False) -> bool:
     return bool(q and q.trusted(prompt))
 
 
-def post_items(items: List[dict], gap_ms: int = 90) -> None:
-    """Post wrapper-style items ({"key": name} / {"text": s}) to the frontmost app."""
+def post_items(items: List[dict], gap_ms: int = 90, bundle_id: Optional[str] = None, ok=None) -> bool:
+    """Post wrapper-style items ({"key": name} / {"text": s}) as key presses: to the app
+    `bundle_id` alone, or without one to whatever app is in front. `ok` is asked before every
+    further item and now and then inside a long text; when it says no (the app is no longer in
+    front) the rest is not sent and the result is False."""
     q = quartz()
     if q is None:
-        return
+        return True
+    pid = _app_pid(bundle_id) if bundle_id else None
+    if bundle_id and pid is None:
+        return False  # the app has quit
     for i, it in enumerate(items):
         if i:
             time.sleep(gap_ms / 1000.0)
+            if ok is not None and not ok():
+                return False
         if "text" in it:
-            q.text(it["text"])
+            if not q.text(it["text"], pid, ok):
+                return False
         else:
-            q.key(it["key"])
+            q.key(it["key"], pid)
+    return True
 
 
 def frontmost_bundle_id() -> Optional[str]:
@@ -683,7 +708,7 @@ def answer_question(bundle_id: str, questions: List[dict], pick: Optional[int]) 
                 time.sleep(0.3)
                 if frontmost_bundle_id() != bundle_id:
                     return "the app is not in front"
-                post_items([{"key": "space"}])
+                post_items([{"key": "space"}], bundle_id=bundle_id)
                 how = "Space"
                 for _ in range(20):
                     time.sleep(0.05)

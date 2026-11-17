@@ -306,13 +306,16 @@ class Daemon:
                     if not note.startswith("kept") or note != self.desktop_focus_note:
                         log.info("message box: %s", note)
                     self.desktop_focus_note = note
+                apps = (self.cfg.get("desktop") or {}).get("apps", [])
+                # The real post sends to this app's process alone and looks again while it types
+                # (macos.post_items); a test double takes just the items and the gap.
+                more = {} if self.desktop_fake else {"bundle_id": app, "ok": lambda: front() in apps}
                 for i in range(0, len(items), 8):
                     if i:
                         time.sleep(gap / 1000.0)
-                    if front() not in (self.cfg.get("desktop") or {}).get("apps", []):
+                    if front() not in apps or post(items[i:i + 8], gap, **more) is False:
                         log.info("desktop keys stopped: another app came to the front")
                         break
-                    post(items[i:i + 8], gap)
             except Exception:
                 log.exception("desktop keys failed")
 

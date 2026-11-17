@@ -956,6 +956,45 @@ class DesktopKeysTest(unittest.TestCase):
         self.assertTrue(_is_message_box("AXTextArea", "Eingabe", True))
         self.assertFalse(_is_message_box("AXTextField", None, True))
 
+    def test_keys_go_to_the_app_alone_and_stop_when_it_leaves_the_front(self):
+        from padpilot import macos
+        sent = []
+
+        class FakeQuartz:
+            def key(self, name, pid=None):
+                sent.append(("key", name, pid))
+
+            def text(self, s, pid=None, ok=None):
+                sent.append(("text", s, pid))
+                return ok is None or ok()
+        saved = (macos._quartz, macos._app_pid)
+        macos._quartz, macos._app_pid = FakeQuartz(), lambda bundle_id: 4242 if bundle_id == "the.app" else None
+        try:
+            items = [{"key": "enter"}, {"key": "esc"}, {"text": "hi"}, {"key": "tab"}]
+            self.assertTrue(macos.post_items(items[:2], 1, "the.app"))
+            self.assertEqual(sent, [("key", "enter", 4242), ("key", "esc", 4242)])  # to that process only
+            del sent[:]
+            answers = iter([True, True, False])  # asked before items 2 and 3, then inside the text
+            self.assertFalse(macos.post_items(items, 1, "the.app", lambda: next(answers)))
+            self.assertEqual([x[:2] for x in sent], [("key", "enter"), ("key", "esc"), ("text", "hi")])
+            self.assertFalse(macos.post_items(items, 1, "gone.app"))  # the app has quit: nothing is posted
+            self.assertEqual(len(sent), 3)
+            del sent[:]
+            self.assertTrue(macos.post_items(items[:1], 1))  # no app named: system-wide, as before
+            self.assertEqual(sent, [("key", "enter", None)])
+        finally:
+            macos._quartz, macos._app_pid = saved
+        # Inside a long text: asked every TEXT_CHECK chunks, and the typing ends at the first no.
+        q = macos._Quartz.__new__(macos._Quartz)
+        posts = []
+        q._post = lambda code, flags, down, text=None, pid=None: posts.append((text, pid))
+        answers = iter([True, False])
+        chunks = 2 * macos.TEXT_CHECK + 10
+        self.assertFalse(q.text("x" * 16 * chunks, 77, lambda: next(answers)))
+        self.assertEqual(len(posts), 2 * 2 * macos.TEXT_CHECK)  # a down and an up for each chunk typed
+        self.assertEqual({p[1] for p in posts}, {77})
+        self.assertTrue(q.text("short", 77, lambda: False))  # too short to be worth asking
+
     def test_character_keys_follow_the_keyboard_layout(self):
         from padpilot.macos import layout_key_event
         french = {"plain": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}, "cmd": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}}

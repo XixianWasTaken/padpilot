@@ -437,8 +437,8 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
   <!-- ===================== 07 desktop ===================== -->
   <section class="ch pixbox" id="desktop">
     <h2><span class="no">07</span><span class="zh">Claude 桌面 app（macOS）</span><span class="en">Claude desktop app (macOS)</span></h2>
-    <p class="zh">没有开着 <code>padpilot run</code> 会话时，按键会变成真正的键盘按下，发给 <b>在最前面的 Claude 桌面 app</b>。别的 app 在前面时什么都不发，光条红闪一下。</p>
-    <p class="en">When no <code>padpilot run</code> session is open, the buttons become real key presses for the <b>Claude desktop app, only while it is in front</b>. If another app is in front, nothing is sent and the light flashes red.</p>
+    <p class="zh">没有开着 <code>padpilot run</code> 会话时，按键会变成真正的键盘按下，发给 <b>在最前面的 Claude 桌面 app</b>。别的 app 在前面时什么都不发，光条红闪一下。按键只投递给 Claude app 这一个进程，中途切到别的 app 也不会打进去。</p>
+    <p class="en">When no <code>padpilot run</code> session is open, the buttons become real key presses for the <b>Claude desktop app, only while it is in front</b>. If another app is in front, nothing is sent and the light flashes red. The presses go to the Claude app's process alone, so they cannot land in an app you switch to meanwhile.</p>
     <p class="zh">第一次要给“辅助功能”权限：</p>
     <p class="en">The first time, allow Accessibility access:</p>
     <pre><code>padpilot desktop    <span class="c"># 系统设置 → 隐私与安全性 → 辅助功能 / System Settings → Privacy &amp; Security → Accessibility</span>
