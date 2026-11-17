@@ -785,6 +785,20 @@ class InteractionTest(unittest.TestCase):
         self.assertEqual(said[-1], "Pop")
         self.assertIn("cues", d.cfg["sounds"])  # the rest of the defaults is kept
 
+    def test_practice_does_not_change_settings(self):
+        # The tutorial asks for PS + △ ("sounds off"); that must not switch the real sounds off.
+        d = Daemon(C.load_config(), None, desktop=self.d.desktop, mic_probe=lambda: False,
+                   resolver=make_resolver(), settings_path=self.tmp / "config.json",
+                   speak=lambda sound, **kw: None)
+        d.practice = Target("watch", "", "", FakeConn())
+        d.watchers.append(d.practice)
+        before = {k: d.cfg.get(k) for k in ("sounds", "brightness", "rumble_scale", "idle_light")}
+        for combo in ("ps+triangle", "ps+up", "ps+down", "ps+left", "ps+right", "ps+square"):
+            d.handle_control(combo)
+        self.assertEqual({k: d.cfg.get(k) for k in before}, before)
+        self.assertFalse((self.tmp / "config.json").exists())
+        self.assertEqual(d.flashes[-1].color, d.cfg["flashes"]["setting"]["color"])  # still shows the press
+
     def test_speaker_on_only_while_a_cue_plays(self):
         # Closing the audio stream makes a noise; the speaker is off by then.
         d = Daemon(C.load_config(), None, desktop=self.d.desktop, mic_probe=lambda: False,

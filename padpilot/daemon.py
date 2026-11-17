@@ -41,6 +41,8 @@ IDLE_FRAME_S = 1 / 15.0
 STALE_SESSION_S = 30 * 60   # hook-only session without events
 STUCK_BUSY_S = 10 * 60      # 'thinking' with no event at all for this long -> idle
 BUSY = ("thinking", "tool", "compacting", "permission")
+# PS combos that change a saved setting; practice mode only shows them.
+SETTING_ACTIONS = ("@brightness_up", "@brightness_down", "@rumble_up", "@rumble_down", "@sounds", "@idle_light")
 
 
 
@@ -672,6 +674,10 @@ class Daemon:
     def _builtin(self, name: str, target: Optional[Target] = None):
         """Run a "@..." step. Returns more steps to run, None, or False when it cannot be done."""
         now = time.monotonic()
+        if name in SETTING_ACTIONS and self.practice is not None:
+            # Practice (the tutorial page): show the press worked, but keep the real setting.
+            self._flash("setting")
+            return None
         if name == "@cycle_focus":
             if self.targets:
                 ids = [t.id for t in self.targets]
