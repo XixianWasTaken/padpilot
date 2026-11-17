@@ -8,18 +8,23 @@
 from __future__ import annotations
 
 import ctypes
+import json
+import logging
 import os
 import subprocess
 import sys
 import time
-from ctypes import POINTER, byref, c_bool, c_char_p, c_int, c_uint16, c_uint32, c_uint64, c_ulong, c_void_p
+from ctypes import (POINTER, byref, c_bool, c_char_p, c_int, c_long, c_uint8, c_uint16, c_uint32, c_uint64,
+                    c_ulong, c_void_p)
 from typing import List, Optional, Tuple
 
 IS_MAC = sys.platform == "darwin"
+log = logging.getLogger("padpilot")
 
 SHIFT, CTRL, ALT, CMD = 0x20000, 0x40000, 0x80000, 0x100000
 
-# Virtual key codes (ANSI layout, Carbon kVK_*).
+# Virtual key codes (Carbon kVK_*): positions on the keyboard, named by what they type on the US
+# layout. See layout_key_event for other layouts.
 _VK = {
     "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11,
     "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21,
@@ -103,7 +108,7 @@ class _Quartz:
             self.cf.CFRelease(ev)
 
     def key(self, name: str) -> None:
-        code, flags = key_event(name)
+        code, flags = layout_key_event(name)
         self._post(code, flags, True)
         self._post(code, flags, False)
 
@@ -128,6 +133,126 @@ def utf16_chunks(s: str, limit: int = 16) -> List[str]:
     if cur:
         out.append("".join(cur))
     return out
+
+
+# ---------------------------------------------------------------- keyboard layout
+# A key press is posted by key code, and a key code is a position on the keyboard: which
+# character it types depends on the keyboard layout. On a French layout the "a" position types
+# q, so Cmd+A posted by position arrives as Cmd+Q. So a character key's position is looked up in
+# the layout in use: with Cmd in the layout's own Cmd layer (a Russian or a "Dvorak - QWERTY ⌘"
+# layout is Latin QWERTY there), otherwise in its plain layer. Enter, Esc, arrows and the like
+# are the same key everywhere.
+#
+# The layout is read in a short-lived child process (`python -m padpilot.macos layout`): the
+# system's text-input calls belong on a main thread, and in a long-lived process without a run
+# loop they keep reporting the layout that was active when it started.
+LAYOUT_TTL_S = 3.0
+_layout: dict = {"at": -1e9, "maps": None}
+
+
+def read_layout(source_id: Optional[str] = None) -> Optional[dict]:
+    """The keyboard layout in use (or the installed one with this input source id) as
+    {"id": ..., "plain": {character: key code}, "cmd": {character: key code}}; None if it cannot
+    be read. Call it on a main thread."""
+    carbon = ctypes.CDLL("/System/Library/Frameworks/Carbon.framework/Carbon")
+    cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+    cf.CFStringCreateWithCString.restype = c_void_p
+    cf.CFStringCreateWithCString.argtypes = [c_void_p, c_char_p, c_uint32]
+    cf.CFStringGetCString.restype = c_bool
+    cf.CFStringGetCString.argtypes = [c_void_p, c_char_p, c_long, c_uint32]
+    cf.CFDictionaryCreate.restype = c_void_p
+    cf.CFDictionaryCreate.argtypes = [c_void_p, POINTER(c_void_p), POINTER(c_void_p), c_long, c_void_p, c_void_p]
+    cf.CFArrayGetCount.restype = c_long
+    cf.CFArrayGetCount.argtypes = [c_void_p]
+    cf.CFArrayGetValueAtIndex.restype = c_void_p
+    cf.CFArrayGetValueAtIndex.argtypes = [c_void_p, c_long]
+    cf.CFDataGetBytePtr.restype = c_void_p
+    cf.CFDataGetBytePtr.argtypes = [c_void_p]
+    carbon.TISCopyCurrentKeyboardLayoutInputSource.restype = c_void_p
+    carbon.TISCopyCurrentASCIICapableKeyboardLayoutInputSource.restype = c_void_p
+    carbon.TISCreateInputSourceList.restype = c_void_p
+    carbon.TISCreateInputSourceList.argtypes = [c_void_p, c_bool]
+    carbon.TISGetInputSourceProperty.restype = c_void_p
+    carbon.TISGetInputSourceProperty.argtypes = [c_void_p, c_void_p]
+    carbon.LMGetKbdType.restype = c_uint8
+    carbon.UCKeyTranslate.restype = ctypes.c_int32
+    carbon.UCKeyTranslate.argtypes = [c_void_p, c_uint16, c_uint16, c_uint32, c_uint32, c_uint32,
+                                      POINTER(c_uint32), c_ulong, POINTER(c_ulong), POINTER(c_uint16)]
+    k_id = c_void_p.in_dll(carbon, "kTISPropertyInputSourceID").value
+    k_data = c_void_p.in_dll(carbon, "kTISPropertyUnicodeKeyLayoutData").value
+
+    def keys_of(src):
+        data = carbon.TISGetInputSourceProperty(src, k_data) if src else None
+        return cf.CFDataGetBytePtr(data) if data else None
+
+    if source_id:
+        keys, vals = (c_void_p * 1)(k_id), (c_void_p * 1)(
+            cf.CFStringCreateWithCString(None, source_id.encode(), 0x08000100))
+        kcb = ctypes.addressof(ctypes.c_char.in_dll(cf, "kCFTypeDictionaryKeyCallBacks"))
+        vcb = ctypes.addressof(ctypes.c_char.in_dll(cf, "kCFTypeDictionaryValueCallBacks"))
+        found = carbon.TISCreateInputSourceList(cf.CFDictionaryCreate(None, keys, vals, 1, kcb, vcb), True)
+        src = cf.CFArrayGetValueAtIndex(found, 0) if found and cf.CFArrayGetCount(found) else None
+    else:
+        src = carbon.TISCopyCurrentKeyboardLayoutInputSource()
+        if not keys_of(src):  # an input method without a layout of its own
+            src = carbon.TISCopyCurrentASCIICapableKeyboardLayoutInputSource()
+    ptr = keys_of(src)
+    if not ptr:
+        return None
+    kbd = carbon.LMGetKbdType()
+
+    def layer(mods: int) -> dict:
+        out: dict = {}
+        for code in sorted(set(_VK.values()) | {10}):  # the character keys; 10 is the extra ISO key
+            dead, n, buf = c_uint32(0), c_ulong(0), (c_uint16 * 4)()
+            # 0: key down; 1: no dead keys, so "^" comes out as itself.
+            if carbon.UCKeyTranslate(ptr, code, 0, mods, kbd, 1, byref(dead), 4, byref(n), buf) == 0 \
+                    and n.value == 1:
+                out.setdefault(chr(buf[0]).lower(), code)
+        return out
+
+    name = ctypes.create_string_buffer(256)
+    ref = carbon.TISGetInputSourceProperty(src, k_id)
+    return {"id": name.value.decode() if ref and cf.CFStringGetCString(ref, name, 256, 0x08000100) else "",
+            "plain": layer(0), "cmd": layer(1)}  # 1: the Cmd key held
+
+
+def layout_maps() -> Optional[dict]:
+    """read_layout() of the layout in use, asked for at most every LAYOUT_TTL_S; None when it
+    cannot be read (then the US positions are used, as before)."""
+    if not IS_MAC:
+        return None
+    now = time.monotonic()
+    if now - _layout["at"] > LAYOUT_TTL_S:
+        _layout["at"] = now
+        try:
+            env = dict(os.environ)
+            env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) \
+                + os.pathsep + env.get("PYTHONPATH", "")
+            out = subprocess.run([sys.executable, "-m", "padpilot.macos", "layout"], capture_output=True,
+                                 text=True, timeout=2, env=env).stdout
+            maps = json.loads(out)
+            if isinstance(maps, dict) and isinstance(maps.get("plain"), dict) and isinstance(maps.get("cmd"), dict):
+                if (_layout["maps"] or {}).get("id") != maps.get("id"):
+                    log.info("keyboard layout: %s", maps.get("id"))
+                _layout["maps"] = maps
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass  # keep what was read last time
+    return _layout["maps"]
+
+
+def layout_key_event(name: str, maps: Optional[dict] = None) -> Tuple[int, int]:
+    """key_event(), with a character key's code taken from the keyboard layout in use (or from
+    `maps`, a read_layout() result)."""
+    code, flags = key_event(name)
+    base = "+" if name.strip() == "+" else name.strip().lower().split("+")[-1]
+    if base in _NAMED or base not in _VK:
+        return code, flags
+    if maps is None:
+        maps = layout_maps()
+    if maps:
+        code = int(maps["cmd" if flags & CMD else "plain"].get(base, code))
+    return code, flags
 
 
 _quartz: Optional[_Quartz] = None
@@ -686,3 +811,8 @@ def mic_in_use() -> bool:
     except (OSError, AttributeError):
         pass
     return False
+
+
+if __name__ == "__main__":  # `python -m padpilot.macos layout [input source id]`: see layout_maps
+    if len(sys.argv) >= 2 and sys.argv[1] == "layout" and IS_MAC:
+        print(json.dumps(read_layout(sys.argv[2] if len(sys.argv) > 2 else None)))

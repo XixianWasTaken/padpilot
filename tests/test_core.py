@@ -741,6 +741,42 @@ class DesktopKeysTest(unittest.TestCase):
         self.assertEqual(self.posted, [])
         self.assertEqual(self.d.flashes[-1].color, [255, 0, 0])
 
+    def test_character_keys_follow_the_keyboard_layout(self):
+        from padpilot.macos import layout_key_event
+        french = {"plain": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}, "cmd": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}}
+        self.assertEqual(layout_key_event("cmd+a", french), (12, CMD))  # where "a" is on that keyboard
+        self.assertEqual(layout_key_event("cmd+z", french), (13, CMD))
+        self.assertEqual(layout_key_event("cmd+shift+d", french), (2, CMD | SHIFT))
+        self.assertEqual(layout_key_event("enter", french), (36, 0))  # not a character key
+        self.assertEqual(layout_key_event("cmd+enter", french), (36, CMD))
+        self.assertEqual(layout_key_event("cmd+k", french), (40, CMD))  # not in the layout: the US position
+        russian = {"plain": {"\u0444": 0}, "cmd": {"a": 0, "z": 6}}
+        self.assertEqual(layout_key_event("cmd+a", russian), (0, CMD))  # Cmd shortcuts are Latin there
+        self.assertEqual(layout_key_event("a", russian), (0, 0))
+        dvorak_qwerty_cmd = {"plain": {"d": 4}, "cmd": {"d": 2}}
+        self.assertEqual(layout_key_event("cmd+d", dvorak_qwerty_cmd), (2, CMD))
+        self.assertEqual(layout_key_event("d", dvorak_qwerty_cmd), (4, 0))
+        self.assertEqual(layout_key_event("cmd+a", {}), (0, CMD))  # layout unknown: as before
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS keyboard layouts")
+    def test_layouts_are_read_from_the_system(self):
+        from padpilot import macos
+        fr = macos.read_layout("com.apple.keylayout.French")
+        if fr is None:
+            self.skipTest("no keyboard layouts in this session")
+        self.assertEqual([fr["plain"][c] for c in "aqzw"], [12, 0, 13, 6])
+        dq = macos.read_layout("com.apple.keylayout.DVORAK-QWERTYCMD")
+        self.assertEqual((dq["plain"]["d"], dq["cmd"]["d"]), (4, 2))
+        ru = macos.read_layout("com.apple.keylayout.Russian")
+        self.assertNotIn("a", ru["plain"])
+        self.assertEqual(ru["cmd"]["a"], 0)
+        # The layout in use, the way the daemon asks for it: in a child process.
+        macos._layout.update(at=-1e9, maps=None)
+        cur = macos.layout_maps()
+        self.assertEqual(sorted(cur), ["cmd", "id", "plain"])
+        self.assertIn("a", cur["cmd"])
+        self.assertIs(macos.layout_maps(), cur)  # not asked again within LAYOUT_TTL_S
+
     def test_square_clears_the_message_box(self):
         self.d.handle_control("square")
         self.wait_posted(1)
