@@ -127,7 +127,7 @@ Everything runs on your own computer. padpilot has no server and no telemetry, a
 - **The daemon.** The first hook starts a background process that opens the DualSense over USB or Bluetooth (HID). It exits after 4 hours without activity (`idle_shutdown_minutes`), or with `padpilot stop`.
 - **One download.** The first time the daemon is needed, padpilot creates `~/.padpilot/venv` and installs `hidapi==0.15.0` from PyPI with pip. That is the only thing padpilot downloads.
 - **Files it reads.**
-  - Claude Code session transcripts in `~/.claude/projects/`. It reads only the end of a session's file: your last message (so R3 still works after a restart), the last next-step card, and how many tokens the last request used. This stays in memory; nothing is copied or sent anywhere.
+  - The end of the current Claude Code session's transcript (the file a hook event names), for one thing only: how many tokens the last request used, which drives the context warning. No message text is used or kept. Your last message and the next-step card come from hook events, not from the transcript.
   - `~/.claude/keybindings.json`, and the dictation shortcut in the Claude app's `claude_desktop_config.json`, so the buttons send the keys you use.
   - `~/.padpilot/config.json`, your settings.
 - **Files it writes**, all in `~/.padpilot/`:
@@ -141,7 +141,7 @@ Everything runs on your own computer. padpilot has no server and no telemetry, a
 - **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending or clearing, it uses the Accessibility API to move keyboard focus to the message box if a button or the sidebar has it (a text field, menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. `padpilot run` types into its own terminal session instead.
 - **Microphone.** It asks CoreAudio whether any app is recording, to light the controller's mic LED. It never opens the microphone and never records audio.
 - **Sound.** Cues are macOS system sounds played on the controller's own speaker (USB only).
-- **Tutorial and manual pages.** Served on `http://127.0.0.1:8737/` and `/manual`, answering only pages from that address. They load their fonts from Google Fonts (`fonts.googleapis.com`), the only internet request padpilot's pages make.
+- **Tutorial and manual pages.** Served on `http://127.0.0.1:8737/` and `/manual`, answering only pages from that address. Their fonts come with padpilot (`padpilot/fonts/`, SIL Open Font License), so the pages load nothing from the internet.
 
 ## Troubleshooting
 
@@ -158,6 +158,7 @@ python3 -m unittest tests/test_core.py   # protocol, buttons, lights, state mach
 python3 tests/drive_wrapper.py           # PTY wrapper with a fake agent (needs the daemon)
 python3 tests/drive_claude.py            # end to end with real Claude Code (uses a few tokens)
 python3 docs/make_logo.py docs/logo.svg  # regenerate the banner
+python3 docs/make_fonts.py FONT_DIR       # rebuild padpilot/fonts after adding Chinese text to a page
 ```
 
 ## License

@@ -2,8 +2,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Web fonts served by padpilot itself (padpilot/fonts, OFL), so the page loads nothing from the internet. */
+@font-face { font-family: "Press Start 2P"; src: url("fonts/press-start-2p.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "VT323"; src: url("fonts/vt323.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "ZCOOL KuaiLe"; src: url("fonts/zcool-kuaile.woff2") format("woff2"); font-display: swap; }
+</style>
 <style>
 /* Layout: one centred column, like a 2003 fan homepage built around a game tutorial. Top to bottom:
    glitter header + marquee, the agent's screen as a Win98 window, the coach's speech box, then the
@@ -31,16 +35,16 @@
   --tri: #0fae7c; --cir: #f0325a; --crs: #2f62ff; --sqr: #d42fc9;
   --lc: rgb(90, 90, 110);
   --pixel: "Press Start 2P", "ZCOOL KuaiLe", monospace;
-  --cute: "ZCOOL KuaiLe", "Noto Sans SC", system-ui, sans-serif;
+  --cute: "ZCOOL KuaiLe", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   --vt: "VT323", "TermCJK", ui-monospace, Menlo, monospace;
-  --body: "Noto Sans SC", system-ui, sans-serif;
+  --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   --head: var(--cute);
   --say: var(--cute);
   color-scheme: dark;
 }
 html[lang="en"] { --head: var(--pixel); --say: var(--vt); }
 /* Chinese inside the VT323 terminal: a system CJK face shrunk to sit on VT323's small x-height. */
-@font-face { font-family: "TermCJK"; src: local("PingFang SC"), local("Hiragino Sans GB"), local("Microsoft YaHei"), local("Noto Sans CJK SC"), local("Noto Sans SC"); size-adjust: 84%; unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF; }
+@font-face { font-family: "TermCJK"; src: local("PingFangSC-Regular"), local("PingFang SC Regular"), local("PingFang SC"), local("HiraginoSansGB-W3"), local("Hiragino Sans GB"), local("Microsoft YaHei"), local("Noto Sans CJK SC"), local("Noto Sans SC"); size-adjust: 84%; unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF; }
 @property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 
 * { box-sizing: border-box; }

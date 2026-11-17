@@ -2,8 +2,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Web fonts served by padpilot itself (padpilot/fonts, OFL), so the page loads nothing from the internet. */
+@font-face { font-family: "Press Start 2P"; src: url("fonts/press-start-2p.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "VT323"; src: url("fonts/vt323.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "ZCOOL KuaiLe"; src: url("fonts/zcool-kuaile.woff2") format("woff2"); font-display: swap; }
+</style>
 <style>
 /* The padpilot manual: the tutorial page's night-sky GeoCities look, laid out like a game's
    printed instruction booklet: cover with the controller, a contents strip, then one boxed
@@ -15,14 +19,14 @@
   --good: #a8ff3f; --bad: #ff4d6d; --key: #2a1d4f; --key-fg: #fff3ff;
   --tri: #0fae7c; --cir: #f0325a; --crs: #2f62ff; --sqr: #d42fc9;
   --pixel: "Press Start 2P", "ZCOOL KuaiLe", monospace;
-  --cute: "ZCOOL KuaiLe", "Noto Sans SC", system-ui, sans-serif;
+  --cute: "ZCOOL KuaiLe", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   --vt: "VT323", "TermCJK", ui-monospace, Menlo, monospace;
-  --body: "Noto Sans SC", system-ui, sans-serif;
+  --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   --head: var(--cute);
   color-scheme: dark;
 }
 html[lang="en"] { --head: var(--pixel); }
-@font-face { font-family: "TermCJK"; src: local("PingFang SC"), local("Hiragino Sans GB"), local("Microsoft YaHei"), local("Noto Sans CJK SC"), local("Noto Sans SC"); size-adjust: 84%; unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF; }
+@font-face { font-family: "TermCJK"; src: local("PingFangSC-Regular"), local("PingFang SC Regular"), local("PingFang SC"), local("HiraginoSansGB-W3"), local("Hiragino Sans GB"), local("Microsoft YaHei"), local("Noto Sans CJK SC"), local("Noto Sans SC"); size-adjust: 84%; unicode-range: U+2E80-9FFF, U+3000-303F, U+FF00-FFEF; }
 @property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 
 /* one language at a time; Chinese when there is no script */
@@ -525,19 +529,19 @@ padpilot stop              <span class="c"># stop the daemon (it restarts when n
       <li><b>Hooks</b>：Claude Code 的事件发生时运行 <code>bin/padpilot hook claude</code>，通过本机 socket 告诉后台程序事件名、会话 id、工作目录和工具名。你发的消息只放在后台程序的内存里，给 R3 用，不写到磁盘。</li>
       <li><b>后台程序</b>：通过 USB 或蓝牙打开手柄，4 小时没有活动自动退出。</li>
       <li><b>唯一一次下载</b>：第一次用时创建 <code>~/.padpilot/venv</code>，从 PyPI 安装 <code>hidapi==0.15.0</code>。</li>
-      <li><b>读</b>：Claude Code 会话记录的末尾（最后一条消息、下一步卡片、上下文用量），你的快捷键设置，Claude app 的听写快捷键。只在内存里用。</li>
+      <li><b>读</b>：当前会话记录末尾的 token 用量（不读消息内容），你的快捷键设置，Claude app 的听写快捷键。只在内存里用。</li>
       <li><b>写</b>：只写 <code>~/.padpilot/</code>。日志里只记按键名和状态，输入的文字只记字数。</li>
       <li><b>按键</b>：只发给在最前面的 Claude 桌面 app。<b>麦克风</b>：只查有没有 app 在录音，从不录音。</li>
-      <li><b>网页</b>：手柄驾校和这本说明书在 <code>127.0.0.1:8737</code> 上提供，字体从 Google Fonts 加载。</li>
+      <li><b>网页</b>：手柄驾校和这本说明书在 <code>127.0.0.1:8737</code> 上提供，字体也是本机提供，不联网。</li>
     </ul>
     <ul class="en">
       <li><b>Hooks</b>: on Claude Code's events, <code>bin/padpilot hook claude</code> tells the daemon, over a local socket, the event name, session id, working folder and tool name. Your prompt stays in the daemon's memory for R3 and is never written to disk.</li>
       <li><b>The daemon</b> opens the controller over USB or Bluetooth and exits after 4 hours without activity.</li>
       <li><b>One download</b>: the first time, it creates <code>~/.padpilot/venv</code> and installs <code>hidapi==0.15.0</code> from PyPI.</li>
-      <li><b>Reads</b>: the end of Claude Code's session transcript (last message, next-step card, context used), your keybindings, and the Claude app's dictation shortcut. Kept in memory only.</li>
+      <li><b>Reads</b>: the token count at the end of the current session's transcript (no message text), your keybindings, and the Claude app's dictation shortcut. Kept in memory only.</li>
       <li><b>Writes</b> only in <code>~/.padpilot/</code>. The log holds button names and states; typed text is logged by its length only.</li>
       <li><b>Keystrokes</b> go only to the Claude desktop app while it is in front. <b>Microphone</b>: it only asks whether some app is recording, and never records.</li>
-      <li><b>Pages</b>: Pad School and this manual are served on <code>127.0.0.1:8737</code> and load their fonts from Google Fonts.</li>
+      <li><b>Pages</b>: Pad School and this manual are served on <code>127.0.0.1:8737</code>, fonts included; they load nothing from the internet.</li>
     </ul>
   </section>
 

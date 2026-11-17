@@ -24,6 +24,7 @@ log = logging.getLogger("padpilot")
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "tutorial.html")
 MANUAL = os.path.join(HERE, "manual.html")  # a plain page: opening it is not practice mode
+FONTS = os.path.join(HERE, "fonts")  # the pages' web fonts, so they load nothing from the internet
 HEARTBEAT_S = 1.0
 PREVIEW_MAX_S = 3600.0
 
@@ -78,8 +79,17 @@ def _make_handler(d, port: int):
 
         def do_GET(self):
             path = self.path.split("?", 1)[0]
-            if not self._allowed(path == "/events"):
+            if not self._allowed(path == "/events" or path.startswith("/fonts/")):
                 return self._send(403, b'{"error":"forbidden"}')
+            if path.startswith("/fonts/"):
+                name = path[len("/fonts/"):]
+                if not (name.endswith(".woff2") and name.replace("-", "").replace(".", "").isalnum()):
+                    return self._send(404, b'{"error":"not found"}')
+                try:
+                    with open(os.path.join(FONTS, name), "rb") as f:
+                        return self._send(200, f.read(), "font/woff2")
+                except OSError:
+                    return self._send(404, b'{"error":"not found"}')
             page = PAGE if path in ("/", "/tutorial", "/tutorial.html") else (
                 MANUAL if path in ("/manual", "/manual.html") else None)
             if page:

@@ -60,6 +60,9 @@ def _stage_package() -> str:
     """Copy the padpilot package to $PADPILOT_HOME/runtime/<content hash>/ and return that root."""
     src = os.path.join(PKG_ROOT, "padpilot")
     names = sorted(n for n in os.listdir(src) if n.endswith((".py", ".html")))
+    fonts = os.path.join(src, "fonts")  # the pages' web fonts
+    if os.path.isdir(fonts):
+        names += sorted("fonts/" + n for n in os.listdir(fonts) if n.endswith((".woff2", ".txt")))
     h = hashlib.sha1()
     blobs = {}
     for n in names:
@@ -70,7 +73,7 @@ def _stage_package() -> str:
     root = runtime / h.hexdigest()[:12]
     if not (root / "padpilot" / "__init__.py").exists():
         tmp = Path(tempfile.mkdtemp(prefix=".stage-", dir=str(C.HOME)))
-        (tmp / "padpilot").mkdir()
+        (tmp / "padpilot" / "fonts").mkdir(parents=True)
         for n, data in blobs.items():
             (tmp / "padpilot" / n).write_bytes(data)
         runtime.mkdir(exist_ok=True)

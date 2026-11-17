@@ -1016,23 +1016,23 @@ class InteractionTest(unittest.TestCase):
         p.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
         return p
 
-    def test_card_and_retry_recovered_from_transcript_after_restart(self):
+    def test_card_and_retry_are_not_read_from_transcripts(self):
+        # A transcript with a card and a prompt, but no hook event since the daemon started:
+        # padpilot does not read messages from transcripts, so there is nothing to send.
         p = self.write_transcript([
             {"type": "user", "message": {"role": "user", "content": "做第一批"}},
             {"type": "last-prompt", "lastPrompt": "做第一批"},
             {"type": "assistant", "message": {"content": [
                 {"type": "tool_use", "name": "mcp__ccd_turn__wrap_up",
                  "input": {"actions": [{"label": "做第二批"}, {"label": "先调手感"}]}}]}},
-            {"type": "user", "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
         ])
         try:
-            self.d.handle_control("r1+circle")  # no hook event since the daemon started
-            self.wait(1)
-            self.assertEqual(self.posted[0][2], {"text": "先调手感"})
+            self.d.handle_control("r1+circle")
             self.d.handle_control("r3")
-            self.wait(2)
-            self.assertEqual(self.posted[1][2], {"text": "做第一批"})
-            self.assertIn("claude:sess-1", self.d.sessions)
+            time.sleep(0.1)
+            self.assertEqual(self.posted, [])
+            self.assertEqual(self.d.flashes[-1].color, [255, 0, 0])
+            self.assertEqual(self.d.sessions, {})
         finally:
             p.unlink()
 
@@ -1094,10 +1094,11 @@ class IOHelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "t.jsonl")
             with open(p, "w") as f:
-                f.write(json.dumps({"type": "user", "message": {"content": "earlier prompt"}}) + "\n")
+                f.write(json.dumps({"type": "assistant", "message": {"model": "claude-x", "usage": {
+                    "input_tokens": 5, "cache_read_input_tokens": 1000, "output_tokens": 20}}}) + "\n")
                 f.write(json.dumps({"type": "user", "message": {"content": [
                     {"type": "tool_result", "content": "z" * (T.TAIL_BYTES + 10)}]}}) + "\n")
-            self.assertEqual(T.last_prompt(p), "earlier prompt")
+            self.assertEqual(T.context_tokens(p), (1025, "claude-x"))
 
     def test_transcript_odd_message_shapes_are_skipped(self):
         from padpilot import transcript as T
@@ -1108,9 +1109,9 @@ class IOHelpersTest(unittest.TestCase):
                           {"type": "user", "message": "a string"},
                           {"type": "assistant", "message": ["x"]}]:
                     f.write(json.dumps(m) + "\n")
-            self.assertEqual(T.last_prompt(p), "real")
-            self.assertEqual(T.last_card(p), [])
             self.assertEqual(T.context_tokens(p), (None, None))
+            self.assertEqual(T.context_tokens(None), (None, None))
+            self.assertFalse(hasattr(T, "last_prompt"))  # no message text is read
 
     def test_terminal_modes_split_across_reads(self):
         from padpilot.wrapper import Wrapper
@@ -1166,6 +1167,22 @@ class TutorialPageTest(unittest.TestCase):
         code, body = self._req("GET", "/")
         self.assertEqual(code, 200)
         self.assertTrue(body.lower().startswith(b"<!doctype html>"))
+
+    def test_pages_load_nothing_from_the_internet(self):
+        import re
+        for path in ("/", "/manual"):
+            code, body = self._req("GET", path)
+            html = body.decode("utf-8")
+            # Links people click may point elsewhere; nothing the page loads by itself may.
+            self.assertEqual(re.findall(r"<link[^>]*https?://|src=.https?://|url\(.?https?://|@import", html), [])
+            fonts = re.findall(r'url\("(fonts/[^"]+)"\)', html)
+            self.assertEqual(len(fonts), 3)
+            for font in fonts:
+                code, data = self._req("GET", "/" + font)
+                self.assertEqual(code, 200, font)
+                self.assertTrue(data.startswith(b"wOF2"), font)
+        self.assertEqual(self._req("GET", "/fonts/../daemon.py")[0], 404)
+        self.assertEqual(self._req("GET", "/fonts/missing.woff2")[0], 404)
 
     def test_manual_is_served_and_is_not_practice_mode(self):
         for path in ("/manual", "/manual.html"):

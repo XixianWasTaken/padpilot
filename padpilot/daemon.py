@@ -78,7 +78,6 @@ class Session:
         # Buttons of the last next-step card: (label, is_app_action), in screen order.
         self.choices: List[tuple] = []
         self.choices_at = 0.0
-        self.card_known = False      # False: choices may still be in the transcript (after a restart)
         self.reminded = False
         self.transcript: Optional[str] = None
         self.context: Optional[float] = None  # share of the context window the last request used
@@ -403,7 +402,7 @@ class Daemon:
                     self._play("hello")
             elif ev == "UserPromptSubmit":
                 s.tools, s.tool, s.turn_start = 0, None, time.monotonic()
-                s.choices, s.card_known = [], True
+                s.choices = []
                 if isinstance(data.get("prompt"), str) and data["prompt"].strip():
                     s.last_prompt = data["prompt"]
                 self.set_state(s, "thinking")
@@ -419,7 +418,6 @@ class Daemon:
                     s.choices = [(str(a.get("label") or ""), bool(a.get("action")))
                                  for a in ti.get("actions") or [] if isinstance(a, dict)][:4]
                     s.choices_at = time.monotonic()
-                    s.card_known = True
                     if s.replies():
                         rumble = "choices"
                 self._flash("tool_start", kind.get("color"), rumble)
@@ -633,34 +631,10 @@ class Daemon:
 
     def _reply_session(self, target: Optional[Target]) -> Optional[Session]:
         if target is not None:
-            s = self.sessions.get(target.id)
-            return self._load_card(s) if s else None
+            return self.sessions.get(target.id)
         ids = {t.id for t in self.targets}
-        cands = [s for s in self.sessions.values() if s.key not in ids]
-        if not cands:
-            s = self._recover_desktop_session()
-            cands = [s] if s else []
-        for s in cands:
-            self._load_card(s)
-        cands = [s for s in cands if s.replies()]
+        cands = [s for s in self.sessions.values() if s.key not in ids and s.replies()]
         return max(cands, key=lambda s: s.choices_at) if cands else None
-
-    def _load_card(self, s: Session) -> Session:
-        """After a restart the card is only in the transcript."""
-        if not s.card_known and s.transcript:
-            s.choices = T.last_card(s.transcript)
-            s.card_known = True
-        return s
-
-    def _recover_desktop_session(self) -> Optional[Session]:
-        """No hook event since the daemon started: assume the session written to last."""
-        path = T.latest_transcript()
-        if not path:
-            return None
-        s = self._session("claude:" + os.path.splitext(os.path.basename(path))[0], "claude",
-                          os.path.basename(os.path.dirname(path)))
-        s.transcript = s.transcript or path
-        return s
 
     def _update_context(self, s: Session) -> None:
         tokens, model = T.context_tokens(s.transcript)
@@ -728,10 +702,6 @@ class Daemon:
             return ["act:clear_input?", "text:" + label, "act:submit"]
         elif name == "@retry":
             s = self.sessions.get(target.id if target is not None else (self._desktop_session() or ""))
-            if s is None and target is None:
-                s = self._recover_desktop_session()
-            if s is not None and not s.last_prompt and s.transcript:
-                s.last_prompt = T.last_prompt(s.transcript)
             if s is None or not s.last_prompt:
                 return False
             # Still sending hook events: it really is running (maybe in another window than the
