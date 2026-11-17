@@ -13,5 +13,15 @@ PY="$HOME_DIR/venv/bin/python3"
 [ -x "$PY" ] || { [ -z "$PADPILOT_HOME" ] && PY="$HOME/.dualsense-agent/venv/bin/python3"; }
 [ -x "$PY" ] || PY="$(command -v python3)"
 if [ -z "$PY" ]; then echo "padpilot: python3 not found" >&2; exit 0; fi
-export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
-exec "$PY" -m padpilot "$@"
+# Not `python -m padpilot`: that looks in the current directory first, so in a folder that has a
+# "padpilot" directory of its own (a checkout of this project, or anything else by that name)
+# that code would run instead of the package next to this script.
+exec "$PY" -c 'import os, sys
+root = sys.argv.pop(1)
+try:
+    here = os.getcwd()
+except OSError:
+    here = ""
+sys.path[:] = [root] + [p for p in sys.path if p not in ("", here)]
+from padpilot.cli import main
+sys.exit(main())' "$ROOT" "$@"

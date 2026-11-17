@@ -1454,6 +1454,26 @@ class DaemonUpdateTest(unittest.TestCase):
         self.assertIn("does not import", (C.HOME / "daemon.stderr").read_text())
 
 
+class LauncherTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "the launcher is a shell script")
+    def test_the_launcher_runs_its_own_package_whatever_the_current_directory_holds(self):
+        import subprocess
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        other = Path(tempfile.mkdtemp(prefix="padpilot-cwd-"))  # a folder with a "padpilot" of its own
+        (other / "padpilot").mkdir()
+        (other / "padpilot" / "__init__.py").write_text("")
+        (other / "padpilot" / "__main__.py").write_text("print('THE WRONG PACKAGE')\n")
+        (other / "padpilot" / "cli.py").write_text("def main():\n    print('THE WRONG PACKAGE')\n    return 0\n")
+        env = dict(os.environ, PYTHONPATH=str(other))  # even when something put that folder on the path
+        r = subprocess.run([os.path.join(root, "bin", "padpilot"), "help"], cwd=str(other), env=env,
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.startswith("padpilot - drive"), r.stdout[:80])
+        r = subprocess.run([os.path.join(root, "bin", "padpilot"), "nonsense"], cwd=str(other), env=env,
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 2)  # arguments still reach the command line
+
+
 class HookTest(unittest.TestCase):
     def run_hook(self, payload):
         from padpilot import hook
