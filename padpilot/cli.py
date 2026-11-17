@@ -129,7 +129,9 @@ def _watch(practice: bool = False) -> int:
     t0 = _time.monotonic()
 
     def items_text(items):
-        return " ".join(repr(i["text"]) if "text" in i else i["key"] for i in items)
+        return " ".join(repr(i["text"]) if "text" in i else i["key"] if "key" in i else
+                        ("question box: submit" if i.get("question") is None else f"question box: option {i['question']}")
+                        for i in items)
 
     def show(msg):
         ts = f"{_time.monotonic() - t0:7.2f}"

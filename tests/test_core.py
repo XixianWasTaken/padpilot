@@ -523,6 +523,37 @@ class DesktopKeysTest(unittest.TestCase):
             ([self.CLAUDE, self.CLAUDE], [{"key": "cmd+a"}, {"key": "backspace"}]),
         ])
 
+    def test_question_box_options_and_submit(self):
+        calls = []
+        fake = (lambda: self.front, lambda prompt=False: True, lambda items, gap: self.posted.append(items))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(),
+                   desktop_question=lambda app, qs, pick: calls.append((app, qs, pick)) or "ok")
+        qs = [{"multiSelect": False, "options": ["A", "B", "C"]}]
+        d.handle_event({"op": "event", "source": "claude", "event": "PreToolUse", "session": "s1",
+                        "data": {"tool_name": "AskUserQuestion", "tool_input": {"questions": qs}}})
+        d.handle_control("r1+circle")   # option 2
+        d.handle_control("cross")       # Submit
+        for _ in range(100):
+            if len(calls) >= 2:
+                break
+            time.sleep(0.01)
+        self.assertEqual(calls, [(self.CLAUDE, qs, 2), (self.CLAUDE, qs, None)])
+        # The box's permission request is not an approval to answer with ✕.
+        d.handle_event({"op": "event", "source": "claude", "event": "PermissionRequest", "session": "s1",
+                        "data": {"tool_name": "AskUserQuestion"}})
+        self.assertEqual(d.sessions["claude:s1"].state, "waiting")
+        self.assertEqual(self.posted, [])  # no key went to the message box
+        # Answered: the box is gone, so ✕ is a plain Enter again.
+        d.handle_event({"op": "event", "source": "claude", "event": "PostToolUse", "session": "s1",
+                        "data": {"tool_name": "AskUserQuestion"}})
+        d.handle_control("cross")
+        for _ in range(100):
+            if self.posted:
+                break
+            time.sleep(0.01)
+        self.assertEqual(self.posted, [[{"key": "enter"}]])
+        self.assertEqual(len(calls), 2)
+
     def test_actions_the_app_lacks_send_nothing(self):
         self.d.handle_control("l1")
         self.d.handle_control("swipe_left")
@@ -1075,6 +1106,13 @@ class HookTest(unittest.TestCase):
                                                                                  {"action": "commit"}]}})
         self.assertEqual(m["data"]["tool_input"], {"actions": [{"label": "Yes", "action": None},
                                                                {"label": "", "action": "commit"}]})
+        m = self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion",
+                           "tool_input": {"questions": [{"question": "secret?", "header": "h", "multiSelect": True,
+                                                         "options": [{"label": "A", "description": "d"}]}]}})
+        self.assertEqual(m["data"]["tool_input"], {"questions": [{"multiSelect": True, "options": ["A"]}]})
+        # Its permission request is passed on as a plain event, not held as an approval.
+        m = self.run_hook({"hook_event_name": "PermissionRequest", "tool_name": "AskUserQuestion", "session_id": "s"})
+        self.assertEqual(m["op"], "event")
         m = self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "Write",
                            "tool_input": {"content": "big"}})
         self.assertNotIn("tool_input", m["data"])

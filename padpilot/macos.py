@@ -200,6 +200,14 @@ class _AX:
         ax.AXUIElementSetAttributeValue.argtypes = [c_void_p, c_void_p, c_void_p]
         ax.AXUIElementSetAttributeValue.restype = c_int
         ax.AXUIElementSetMessagingTimeout.argtypes = [c_void_p, ctypes.c_float]
+        ax.AXUIElementPerformAction.argtypes = [c_void_p, c_void_p]
+        ax.AXUIElementPerformAction.restype = c_int
+        cf.CFBooleanGetTypeID.restype = c_ulong
+        cf.CFBooleanGetValue.argtypes = [c_void_p]
+        cf.CFBooleanGetValue.restype = c_bool
+        cf.CFNumberGetTypeID.restype = c_ulong
+        cf.CFNumberGetValue.argtypes = [c_void_p, ctypes.c_long, c_void_p]
+        cf.CFNumberGetValue.restype = c_bool
         cf.CFStringCreateWithCString.restype = c_void_p
         cf.CFStringCreateWithCString.argtypes = [c_void_p, c_char_p, c_uint32]
         cf.CFStringGetCString.argtypes = [c_void_p, c_char_p, ctypes.c_long, c_uint32]
@@ -242,6 +250,32 @@ class _AX:
             return buf.value.decode("utf-8", "replace") if self.cf.CFStringGetCString(v, buf, 1024, 0x08000100) else None
         finally:
             self.cf.CFRelease(v)
+
+    def num(self, el, attr: str) -> Optional[int]:
+        """A boolean or number attribute as an int (AXValue of a toggle button: 1 = on)."""
+        err, v = self.copy(el, attr)
+        if not v:
+            return None
+        try:
+            t = self.cf.CFGetTypeID(v)
+            if t == self.cf.CFBooleanGetTypeID():
+                return int(self.cf.CFBooleanGetValue(v))
+            if t == self.cf.CFNumberGetTypeID():
+                out = ctypes.c_int32()
+                return out.value if self.cf.CFNumberGetValue(v, 3, byref(out)) else None  # kCFNumberSInt32Type
+            return None
+        finally:
+            self.cf.CFRelease(v)
+
+    def kids(self, el, arrays: list) -> list:
+        """Children of `el`, borrowed from an array appended to `arrays` (release those)."""
+        err, arr = self.copy(el, "AXChildren")
+        if not arr:
+            return []
+        arrays.append(arr)
+        if self.cf.CFGetTypeID(arr) != self.cf.CFArrayGetTypeID():
+            return []
+        return [self.cf.CFArrayGetValueAtIndex(arr, i) for i in range(self.cf.CFArrayGetCount(arr))]
 
     def chain(self, el) -> list:
         """Ancestors of `el` from its window down to `el` (all retained; release them)."""
@@ -371,6 +405,136 @@ def focus_message_box(bundle_id: str) -> str:
                     return f"focused (was {role})"
             time.sleep(0.02)
         return f"asked to focus the message box (was {role}), not confirmed"
+    finally:
+        for v in held:
+            cf.CFRelease(v)
+        cf.CFRelease(app)
+
+
+# ---------------------------------------------------------------- question box
+# The Claude app's multiple-choice question box (AskUserQuestion): an AXApplicationGroup whose
+# options are toggle buttons, then "Other", then Skip and Submit (or Next). Pressing an option
+# through Accessibility only focuses it, so it is focused and given a real Space key press;
+# Submit takes an AXPress. Tested in Claude desktop, November 2026.
+def _question_card(a, window, labels: List[str], arrays: list):
+    """(card, its toggle buttons) of the box whose options start with these labels."""
+    found: list = []
+    budget = [8000]
+
+    def walk(el, depth):
+        budget[0] -= 1
+        if found or budget[0] < 0 or depth > 120:
+            return
+        if a.text(el, "AXSubrole") == "AXApplicationGroup":
+            toggles = []
+
+            def opts(e, d):  # the options sit a level or two below the group
+                for k in a.kids(e, arrays):
+                    if a.text(k, "AXSubrole") == "AXToggleButton":
+                        toggles.append(k)
+                    elif d < 3:
+                        opts(k, d + 1)
+            opts(el, 0)
+            titles = [a.text(t, "AXTitle") or "" for t in toggles]
+            if labels and len(titles) >= len(labels) and all(
+                    t.startswith(l) for t, l in zip(titles, labels)):
+                found.append((el, toggles))
+                return
+        for k in a.kids(el, arrays):
+            walk(k, depth + 1)
+
+    walk(window, 0)
+    return found[0] if found else (None, [])
+
+
+def _buttons(a, card, arrays: list) -> list:
+    out: list = []
+
+    def walk(e, d):
+        for k in a.kids(e, arrays):
+            if a.text(k, "AXRole") == "AXButton":
+                out.append(k)
+            elif d < 4:
+                walk(k, d + 1)
+    walk(card, 0)
+    return out
+
+
+def answer_question(bundle_id: str, questions: List[dict], pick: Optional[int]) -> str:
+    """Answer the single-choice question box on screen. `questions` are the box's questions as
+    the hook saw them ({"options": [label, ...], "multiSelect": bool}); the one whose options
+    are on screen is answered. pick = option number (1-based), then Submit (or Next) is pressed;
+    pick = None presses Submit with the option already selected."""
+    global _ax
+    if not IS_MAC:
+        return "not macOS"
+    if _ax is None:
+        try:
+            _ax = _AX()
+        except (OSError, AttributeError) as e:
+            return f"no Accessibility API ({e})"
+    a, cf = _ax, _ax.cf
+    pid = _app_pid(bundle_id)
+    if pid is None:
+        return "app not running"
+    app = a.ax.AXUIElementCreateApplication(pid)
+    held: list = []
+    try:
+        a.ax.AXUIElementSetMessagingTimeout(app, 0.5)
+        if pid not in a.enabled:
+            a.ax.AXUIElementSetAttributeValue(app, a._name("AXManualAccessibility"), a.true)
+            a.enabled.add(pid)
+            time.sleep(0.3)
+        err, window = a.copy(app, "AXFocusedWindow")
+        if not window:
+            return "no window"
+        held.append(window)
+        card, toggles, q = None, [], None
+        for q in questions:
+            card, toggles = _question_card(a, window, list(q.get("options") or []), held)
+            if card is not None:
+                break
+        if card is None:
+            return "question box not found"
+        n_opts = len(q.get("options") or [])
+        multi = bool(q.get("multiSelect"))
+        if pick is not None:
+            if not 1 <= pick <= n_opts:
+                return f"the question has no option {pick}"
+            el = toggles[pick - 1]
+            before = a.num(el, "AXValue")
+            how = "press"
+            if multi or before != 1:
+                # AXPress clicks the option only when focus is already in the box; otherwise it
+                # just moves focus there, and a real Space press (the button takes it as a
+                # click) does the job. So press, look, and use Space only if nothing changed.
+                a.ax.AXUIElementPerformAction(el, a._name("AXPress"))
+                time.sleep(0.3)
+            if (multi or before != 1) and a.num(el, "AXValue") == before:
+                if a.ax.AXUIElementSetAttributeValue(el, a._name("AXFocused"), a.true):
+                    return "could not focus the option"
+                time.sleep(0.3)
+                if frontmost_bundle_id() != bundle_id:
+                    return "the app is not in front"
+                post_items([{"key": "space"}])
+                how = "Space"
+                for _ in range(20):
+                    time.sleep(0.05)
+                    if a.num(el, "AXValue") != before:
+                        break
+                else:
+                    return f"option {pick} did not change"
+            if multi:
+                return f"option {pick} {'ticked' if a.num(el, 'AXValue') == 1 else 'unticked'} ({how})"
+        buttons = _buttons(a, card, held)
+        if not buttons:
+            return "no Submit button"
+        submit = buttons[-1]  # Skip first, then Submit / Next (titles are translated)
+        if a.num(submit, "AXEnabled") == 0:
+            return "Submit is not enabled yet"
+        if a.ax.AXUIElementPerformAction(submit, a._name("AXPress")):
+            return "could not press Submit"
+        return f"picked option {pick} ({how}) and submitted" if pick else "submitted"
     finally:
         for v in held:
             cf.CFRelease(v)

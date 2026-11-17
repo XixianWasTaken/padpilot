@@ -17,6 +17,20 @@ KEEP_FIELDS = ("tool_name", "notification_type", "source", "is_interrupt", "erro
 MAX_PROMPT = 20000
 
 
+QUESTION_TOOL = "AskUserQuestion"  # the multiple-choice question box
+
+
+def question_input(ti) -> dict:
+    """The parts of an AskUserQuestion input padpilot needs: option labels and multiSelect."""
+    qs = []
+    for q in (ti.get("questions") or [])[:4] if isinstance(ti, dict) else []:
+        if isinstance(q, dict):
+            qs.append({"multiSelect": bool(q.get("multiSelect")),
+                       "options": [str(o.get("label", ""))[:200] for o in (q.get("options") or [])[:4]
+                                   if isinstance(o, dict)]})
+    return {"questions": qs}
+
+
 def is_choice_tool(name) -> bool:
     return isinstance(name, str) and (name == "wrap_up" or name.endswith("__wrap_up"))
 
@@ -60,10 +74,15 @@ def _dispatch(source: str, p: dict) -> None:
         msg["data"]["tool_input"] = {"actions": [
             {"label": str(a.get("label", ""))[:200], "action": a.get("action")}
             for a in (ti.get("actions") or [])[:4] if isinstance(a, dict)]}
+    # The options of a question box, so R1 + face buttons can pick them.
+    if event == "PreToolUse" and p.get("tool_name") == QUESTION_TOOL and isinstance(ti, dict):
+        msg["data"]["tool_input"] = question_input(ti)
     if event in START_ON:
         client.start_daemon()
 
-    if event == "PermissionRequest" and not msg["wrapper"]:
+    # A question box also asks for permission, but it is answered in the box, not approved:
+    # don't hold it, or the first ✕ meant for the box would approve it.
+    if event == "PermissionRequest" and not msg["wrapper"] and p.get("tool_name") != QUESTION_TOOL:
         cfg = C.load_config()
         timeout = float(cfg.get("hook_approval_timeout_s", 0) or 0)
         if timeout > 0:

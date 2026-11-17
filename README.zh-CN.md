@@ -143,7 +143,7 @@ alias cx='padpilot run codex'
 
 #### 下一步卡片（R1 + 面键）
 
-Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“先做第一批 / 全部做”）。插件的 hook 在 Claude 调用 `wrap_up` 时记下按钮文字，**R1 + ✕ 选第 1 个，R1 + ○ 选第 2 个**，效果和点击一样：清空输入框，输入按钮文字，发送。卡片出现时手柄轻点两下，玩家灯亮出按钮个数。“提交 / 建 PR”这类 app 自己处理的按钮不能用手柄按，按了是“不行”的两下短震；发了新消息后旧卡片作废。daemon 重启后（比如闲置 4 小时自动退出过）它不记得之前的卡片，要等下一张卡片出现才能选。
+Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“先做第一批 / 全部做”）。插件的 hook 在 Claude 调用 `wrap_up` 时记下按钮文字，**R1 + ✕ 选第 1 个，R1 + ○ 选第 2 个**，效果和点击一样：清空输入框，输入按钮文字，发送。卡片出现时手柄轻点两下，玩家灯亮出按钮个数。“提交 / 建 PR”这类 app 自己处理的按钮不能用手柄按，按了是“不行”的两下短震；发了新消息后旧卡片作废。Claude 中途弹出的提问框（几个选项加 Skip / Submit）也用 **R1 + 面键** 选第 1–4 个选项：单选题选完直接提交；多选题每按一次勾上或取消，选好按 ✕ 提交。提问框开着时光条是等你回答的黄色；Claude Code 为提问框发的权限请求不会被当成审批，所以 ✕ 不会被它吃掉。daemon 从 hook 拿到选项文字，再用辅助功能接口找到这些选项，聚焦后按一下空格来选，然后按下 Submit。“Other” 自己写答案仍要用鼠标。daemon 重启后（比如闲置 4 小时自动退出过）它不记得之前的卡片，要等下一张卡片出现才能选。
 
 #### 重试（R3）
 
@@ -273,8 +273,8 @@ padpilot uninstall-codex
 
 所有东西都在你自己的电脑上运行。padpilot 没有服务器，不收集使用数据，会话里的任何内容都不会离开这台电脑。完整列表：
 
-- **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字。
-- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。
+- **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字；弹出提问框时，带上选项文字和是否多选（不带问题本身）。
+- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。提问框的权限请求不会被拦下等待，直接在提问框里回答。
 - **守护进程**：第一个 hook 会启动一个后台进程，通过 USB 或蓝牙（HID）打开手柄。4 小时没有活动会自动退出（`idle_shutdown_minutes`），也可以用 `padpilot stop` 停掉。
 - **唯一一次下载**：第一次需要守护进程时，padpilot 会创建 `~/.padpilot/venv`，并用 pip 从 PyPI 安装 `hidapi==0.15.0`。这是 padpilot 唯一会下载的东西。
 - **读取的文件**：

@@ -31,7 +31,7 @@ from .controls import WHEEL_BUTTON, ControlTracker
 from .sound import DEVICE, Speaker
 from .dualsense import PLAYER_PATTERNS, DualSense, OutputState, make_trigger, parse_input
 from .effects import Flash, RumblePlayer, light_at, mix, scale
-from .hook import is_choice_tool
+from .hook import QUESTION_TOOL, is_choice_tool
 from .keys import encode_key, split_action, to_items
 
 log = logging.getLogger("padpilot")
@@ -57,6 +57,8 @@ def _describe(item: dict) -> str:
     no prompt or reply text ends up in the log."""
     if "text" in item:
         return f"text({len(str(item['text']))} chars)"
+    if "question" in item:
+        return "question box: " + ("submit" if item["question"] is None else f"option {item['question']}")
     return str(item.get("key", item))
 
 class Session:
@@ -78,6 +80,9 @@ class Session:
         # Buttons of the last next-step card: (label, is_app_action), in screen order.
         self.choices: List[tuple] = []
         self.choices_at = 0.0
+        # An open question box (AskUserQuestion): [{"options": [label], "multiSelect": bool}].
+        self.questions: List[dict] = []
+        self.questions_at = 0.0
         self.reminded = False
         self.transcript: Optional[str] = None
         self.context: Optional[float] = None  # share of the context window the last request used
@@ -142,7 +147,7 @@ class Approval:
 
 class Daemon:
     def __init__(self, cfg: dict, hid_module=None, desktop=None, mic_probe=None, resolver=None,
-                 settings_path=None, speak=None, desktop_focus=None):
+                 settings_path=None, speak=None, desktop_focus=None, desktop_question=None):
         self.cfg = cfg
         # Spoken cues on the controller speaker; tests pass a fake (then USB is not required).
         self.speak_any = speak is not None
@@ -156,6 +161,8 @@ class Daemon:
         # Desktop key injection: (frontmost_bundle_id, trusted, post_items); tests pass fakes.
         self.desktop = desktop or (macos.frontmost_bundle_id, macos.accessibility_trusted, macos.post_items)
         self.desktop_fake = desktop is not None
+        # Answers the question box (bundle id, questions, option or None) -> what happened.
+        self.desktop_question = desktop_question or (None if self.desktop_fake else macos.answer_question)
         # Moves focus to the app's message box (bundle id -> what happened); tests pass a fake.
         self.desktop_focus = desktop_focus or (None if self.desktop_fake else macos.focus_message_box)
         self.desktop_focus_note = ""  # last result, for the log only when it changes
@@ -231,6 +238,11 @@ class Daemon:
             # Typing can take seconds (or wait behind other presses): stop if the user switched
             # to another app meanwhile, instead of typing into it.
             try:
+                if items and "question" in items[0]:
+                    if self.desktop_question is not None:
+                        q = items[0]
+                        log.info("question box: %s", self.desktop_question(app, q["questions"], q["question"]))
+                    continue
                 if self.desktop_focus is not None and needs_message_box(items):
                     note = self.desktop_focus(app)
                     if not note.startswith("kept") or note != self.desktop_focus_note:
@@ -402,7 +414,7 @@ class Daemon:
                     self._play("hello")
             elif ev == "UserPromptSubmit":
                 s.tools, s.tool, s.turn_start = 0, None, time.monotonic()
-                s.choices = []
+                s.choices, s.questions = [], []
                 if isinstance(data.get("prompt"), str) and data["prompt"].strip():
                     s.last_prompt = data["prompt"]
                 self.set_state(s, "thinking")
@@ -420,11 +432,21 @@ class Daemon:
                     s.choices_at = time.monotonic()
                     if s.replies():
                         rumble = "choices"
+                if s.tool == QUESTION_TOOL and isinstance(ti, dict):
+                    s.questions = [q for q in ti.get("questions") or []
+                                   if isinstance(q, dict) and isinstance(q.get("options"), list)]
+                    s.questions_at = time.monotonic()
+                    if s.questions:
+                        rumble = "choices"
                 self._flash("tool_start", kind.get("color"), rumble)
             elif ev in ("PostToolUse", "PostToolBatch"):
+                if data.get("tool_name") == QUESTION_TOOL:
+                    s.questions = []
                 if s.state in ("tool", "permission", "waiting", "idle"):
                     self.set_state(s, "thinking")
             elif ev == "PostToolUseFailure":
+                if data.get("tool_name") == QUESTION_TOOL:
+                    s.questions = []
                 if data.get("is_interrupt"):
                     self.set_state(s, "idle")
                 else:
@@ -434,10 +456,15 @@ class Daemon:
                 self._flash("tool_fail")
                 self.set_state(s, "thinking")
             elif ev == "PermissionRequest":
-                self._attention(s, key)
+                if data.get("tool_name") == QUESTION_TOOL:
+                    self.set_state(s, "waiting")  # a question box: waiting for your answer
+                else:
+                    self._attention(s, key)
             elif ev == "Notification":
                 nt = data.get("notification_type", "")
-                if nt == "permission_prompt":
+                if nt == "permission_prompt" and s.questions:
+                    self.set_state(s, "waiting")  # the question box, not an approval
+                elif nt == "permission_prompt":
                     self._attention(s, key)
                 elif nt in ("idle_prompt", "agent_needs_input", "elicitation_dialog", "elicitation_url_dialog"):
                     # "done" stays until a button press (the idle reminder follows Stop).
@@ -448,6 +475,7 @@ class Daemon:
             elif ev == "Elicitation":
                 self.set_state(s, "waiting")
             elif ev == "Stop":
+                s.questions = []
                 self._update_context(s)
                 long_turn = s.turn_start and time.monotonic() - s.turn_start >= self.cfg.get("celebrate_after_s", 60)
                 self.set_state(s, "done")
@@ -567,6 +595,18 @@ class Daemon:
             else:
                 out.append(st)
         sess = self.sessions.get(skey) if skey else None
+        qsess = self._question_session() if desktop else None
+        if qsess is not None and out == ["act:submit"]:
+            out = ["ask:submit"]  # ✕ / R2 press the question box's Submit
+        if qsess is not None and len(out) == 1 and out[0].startswith("ask:"):
+            arg = out[0][4:]
+            item = {"question": None if arg == "submit" else int(arg), "questions": qsess.questions}
+            if self.practice is not None:
+                self._notify({"op": "would_send", "name": name, "dest": dest, "items": [item]})
+                return True
+            if not self._desktop_send([item]):
+                return self._deny(name, "Claude app is not in front (or no Accessibility permission)")
+            return True
         if desktop:
             # The latest session may not be the one asking; any desktop session asking will do.
             wrapped = {t.id for t in self.targets}
@@ -629,6 +669,12 @@ class Daemon:
             if s.state == "done":
                 self.set_state(s, "idle")
 
+    def _question_session(self) -> Optional[Session]:
+        """The desktop session with an open question box, if any."""
+        ids = {t.id for t in self.targets}
+        cands = [s for s in self.sessions.values() if s.key not in ids and s.questions]
+        return max(cands, key=lambda s: s.questions_at) if cands else None
+
     def _reply_session(self, target: Optional[Target]) -> Optional[Session]:
         if target is not None:
             return self.sessions.get(target.id)
@@ -690,6 +736,8 @@ class Daemon:
             self.focus = ids[(i + (1 if name == "@next_session" else -1)) % len(ids)]
             self._flash("focus")
         elif name.startswith("@choose:"):
+            if target is None and self._desktop_enabled() and self._question_session() is not None:
+                return ["ask:" + name.split(":", 1)[1]]  # an option of the open question box
             # Clicking a reply button sends its label as your message; do the same.
             s = self._reply_session(target)
             try:
