@@ -516,11 +516,13 @@ class DesktopKeysTest(unittest.TestCase):
         d.handle_control("down")       # arrows act on whatever has focus (menus, lists)
         d.handle_control("triangle")   # typed text and Enter belong in the message box
         d.handle_control("square")
-        self.wait_posted(3)
+        d.handle_control("circle")     # Esc interrupts only from the message box
+        self.wait_posted(4)
         self.assertEqual(self.posted, [
             ([], [{"key": "down"}]),
             ([self.CLAUDE], [{"text": "continue"}, {"key": "enter"}]),
             ([self.CLAUDE, self.CLAUDE], [{"key": "cmd+a"}, {"key": "backspace"}]),
+            ([self.CLAUDE] * 3, [{"key": "esc"}]),
         ])
 
     def test_question_box_options_and_submit(self):

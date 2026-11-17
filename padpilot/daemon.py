@@ -44,8 +44,10 @@ BUSY = ("thinking", "tool", "compacting", "permission")
 # PS combos that change a saved setting; practice mode only shows them.
 SETTING_ACTIONS = ("@brightness_up", "@brightness_down", "@rumble_up", "@rumble_down", "@sounds", "@idle_light")
 
-# Desktop keys that only do their job in the message box: typing, sending, clearing, undo.
-BOX_KEYS = ("enter", "shift+enter", "cmd+enter", "cmd+a", "backspace", "cmd+z")
+# Desktop keys that only do their job in the message box: typing, sending, clearing, undo, and
+# Esc, which interrupts from the message box but not from a focused button (tested). Menus and
+# dialogs keep focus, so Esc still closes them.
+BOX_KEYS = ("enter", "shift+enter", "cmd+enter", "cmd+a", "backspace", "cmd+z", "esc")
 
 
 def needs_message_box(items: List[dict]) -> bool:
