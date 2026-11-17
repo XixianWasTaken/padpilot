@@ -152,6 +152,12 @@ DEFAULTS = {
     "approve_buttons": ["cross", "r2_full"],
     "deny_buttons": ["circle", "l2_full"],
     "defer_buttons": ["triangle"],
+    # A press within this time after a permission request appears does not answer it: it was
+    # already on its way to something else. The pad buzzes "denied"; press again.
+    "approval_grace_ms": 600,
+    # `padpilot press` and `padpilot send` never answer a permission request; only the real
+    # controller does. true lifts that, for test scripts that drive an agent through the daemon.
+    "scripted_input_answers_permission": False,
     # Let other apps read the controller too (browsers' Gamepad API). Practice mode does this anyway.
     # Off by default: shared, macOS also sees the PS button and opens its Games app.
     "share_controller": False,

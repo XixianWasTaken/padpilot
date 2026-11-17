@@ -146,6 +146,7 @@ class Approval:
         self.tool = tool
         self.event = threading.Event()
         self.decision: Optional[str] = None
+        self.created = time.monotonic()
 
 
 class Daemon:
@@ -200,6 +201,7 @@ class Daemon:
         self.practice: Optional[Target] = None  # `padpilot watch --practice`: report, don't send
         self.preview: Optional[tuple] = None    # (light spec, since): the tutorial page shows a state
         self.ptt_sent: Dict[str, bool] = {}  # push-to-talk control -> its press was delivered
+        self.started = time.monotonic()
 
     # ------------------------------------------------------------ helpers
     def _mapping_for(self, target: Optional[Target]) -> dict:
@@ -306,6 +308,8 @@ class Daemon:
             if self.practice is None:
                 log.info("practice mode on")
             self.practice = w
+            for a in self.approvals:  # practice answers no real request: the screen takes them
+                a.event.set()
 
     def remove_watcher(self, w: Target) -> None:
         self.watchers = [x for x in self.watchers if x is not w]
@@ -513,12 +517,14 @@ class Daemon:
         self.handle_event(dict(msg, event="PermissionRequest"))
         source = msg.get("source", "agent")
         key = msg.get("wrapper") or f"{source}:{msg.get('session') or 'default'}"
-        # Right after a cold start the device thread may still be opening the controller.
-        deadline = time.monotonic() + 1.5
+        # Right after a cold start the device thread may still be opening the controller. Later
+        # on, no controller means nobody to ask, and a request must not wait for one.
+        deadline = self.started + 2.0
         while self.dev is None and self.hid is not None and time.monotonic() < deadline:
             time.sleep(0.05)
         with self.lock:
-            if self.dev is None or timeout <= 0 or self.locked:
+            # Practice mode answers no real request either (see handle_control).
+            if self.dev is None or timeout <= 0 or self.locked or self.practice is not None:
                 return None  # the on-screen dialog takes it
             a = Approval(key, (msg.get("data") or {}).get("tool_name", ""))
             self.approvals.append(a)
@@ -532,7 +538,26 @@ class Daemon:
         return a.decision
 
     # ------------------------------------------------------------ input
-    def handle_control(self, name: str) -> None:
+    def _grace(self) -> float:
+        """Seconds after a permission request appears in which a press cannot answer it: such a
+        press was already on its way to something else."""
+        return float(self.cfg.get("approval_grace_ms", 600)) / 1000.0
+
+    def _scripted_ok(self) -> bool:
+        return bool(self.cfg.get("scripted_input_answers_permission"))
+
+    def asking(self, target: Optional[Target]) -> bool:
+        """True while the session that keys for `target` would reach (None: one in the desktop
+        app) is asking for permission."""
+        if target is not None:
+            s = self.sessions.get(target.id)
+            return bool(s and s.state == "permission")
+        wrapped = {t.id for t in self.targets}
+        return any(s.state == "permission" and s.key not in wrapped for s in self.sessions.values())
+
+    def handle_control(self, name: str, injected: bool = False) -> None:
+        """A control the tracker reported, or with `injected` one that came over the socket
+        (`padpilot press`). A scripted press never answers a permission request."""
         with self.lock:
             self.last_activity = time.monotonic()
             self._notify({"op": "control", "name": name})
@@ -558,7 +583,8 @@ class Daemon:
             if self.locked:
                 return
             self._ack_done()
-            if self.approvals and self.practice is None:  # practice never answers a real request
+            # Practice never answers a real request, and neither does a scripted press.
+            if self.approvals and self.practice is None and (not injected or self._scripted_ok()):
                 a = self.approvals[0]
                 verdict = None
                 if name in self.cfg.get("approve_buttons", []):
@@ -567,6 +593,11 @@ class Daemon:
                     verdict = "deny"
                 elif name in self.cfg.get("defer_buttons", []):
                     verdict = "defer"
+                if verdict in ("allow", "deny") and time.monotonic() - a.created < self._grace():
+                    # Pressed as the request appeared, so meant for something else: it answers
+                    # nothing and does nothing. The next press counts.
+                    self._deny(name, "a permission request has just appeared; press again to answer it")
+                    return
                 if verdict:
                     a.decision = None if verdict == "defer" else verdict
                     self.approvals.remove(a)
@@ -577,11 +608,11 @@ class Daemon:
             if name.endswith("_up") and name[:-3] in self.tracker.push_to_talk:
                 if not self.ptt_sent.pop(name[:-3], False):
                     return
-            ok = self._run(name, split_action(action), target)
+            ok = self._run(name, split_action(action), target, injected)
             if name in self.tracker.push_to_talk:
                 self.ptt_sent[name] = ok
 
-    def _run(self, name: str, steps: List[str], target: Optional[Target]) -> bool:
+    def _run(self, name: str, steps: List[str], target: Optional[Target], injected: bool = False) -> bool:
         """Run a mapping's steps on the focused wrapper or the desktop app. False (and a
         "denied" buzz) if it could not be done."""
         self.after_send: List[Callable[[], None]] = []
@@ -618,11 +649,15 @@ class Daemon:
                 sess = max(asking, key=lambda x: x.updated)
         # "act:<action>" steps become the keys this destination really uses.
         expanded, acts = [], []
+        asking = bool(sess and sess.state == "permission")
         for st in out:
             if st.startswith("act:"):
                 # "act:x?" is optional: skipped where the destination has no such action.
                 act = st[4:].rstrip("?")
-                keys = self.resolver.resolve(act, dest, permission=bool(sess and sess.state == "permission"))
+                if act == "submit" and asking and time.monotonic() - sess.since < self._grace():
+                    # The prompt appeared as this was pressed: Enter would confirm it unseen.
+                    return self._deny(name, "a permission prompt has just appeared; press again to answer it")
+                keys = self.resolver.resolve(act, dest, permission=asking)
                 if not keys:
                     if st.endswith("?"):
                         continue
@@ -644,6 +679,8 @@ class Daemon:
             return self._deny(name, f"unknown key {e} in the mapping")
         if not items:
             return True
+        if injected and asking and not self._scripted_ok():
+            return self._deny(name, "a scripted press does not answer a permission request")
         if self.practice is not None:
             self._notify({"op": "would_send", "name": name, "dest": dest, "items": items})
             return True
@@ -1182,14 +1219,17 @@ def _serve_conn(d: Daemon, conn: socket.socket) -> None:
                 reply({"ok": True, "controller": d.dev is not None})
             elif op == "local" and target is not None:
                 d.local_input(target.id, msg.get("keys") or [])
-            elif op == "control":  # inject a control name (testing / scripting)
-                d.handle_control(msg.get("name", ""))
+            elif op == "control":  # a scripted press (`padpilot press`), for tests and scripts
+                d.handle_control(msg.get("name", ""), injected=True)
                 reply({"ok": True})
             elif op == "send":  # type text into the focused wrapper (or desktop app), then Enter
                 items = [{"text": msg.get("text", "")}] + ([] if msg.get("no_enter") else [{"key": "enter"}])
                 with d.lock:
                     t = d._focused()
-                    if t is not None:
+                    if d.asking(t) and not d._scripted_ok():
+                        ok = False  # typed text is not the answer to a permission request
+                        log.info("send: refused, the session is asking for permission")
+                    elif t is not None:
                         ok = t.send({"op": "type", "gap_ms": d.cfg.get("sequence_gap_ms", 90), "items": items})
                     else:
                         ok = d._desktop_send(items)

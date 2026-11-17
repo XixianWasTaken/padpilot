@@ -456,11 +456,113 @@ class DaemonLogicTest(unittest.TestCase):
             if self.d.approvals:
                 break
             threading.Event().wait(0.01)
+        self.d.approvals[0].created -= 1  # the request has been there for a moment
         self.d.handle_control("r2_full")
         th.join(2)
         self.assertEqual(result.get("d"), "allow")
         self.d.dev = None
         self.assertIsNone(self.d.request_approval({"source": "claude", "session": "s9", "timeout": 5}))
+
+    def ask(self, d=None, timeout=5):
+        """Start a hook approval request in a thread; returns (thread, result dict)."""
+        import threading
+        d = d or self.d
+        result = {}
+        th = threading.Thread(target=lambda: result.update(
+            d=d.request_approval({"source": "claude", "session": "s9", "timeout": timeout, "data": {}})))
+        th.start()
+        for _ in range(200):
+            if d.approvals or not th.is_alive():
+                break
+            time.sleep(0.005)
+        return th, result
+
+    def test_a_press_made_as_the_request_appears_does_not_answer_it(self):
+        self.d.dev = object()
+        th, result = self.ask()
+        self.d.handle_control("cross")  # already on its way when the request appeared
+        self.assertEqual(len(self.d.approvals), 1)
+        self.assertEqual(self.d.flashes[-1].color, [255, 0, 0])  # the "denied" buzz
+        self.d.handle_control("triangle")  # handing it to the screen is harmless: no wait
+        th.join(2)
+        self.assertEqual(result, {"d": None})
+        th, result = self.ask()
+        self.d.approvals[0].created -= 1  # a moment later the same press counts
+        self.d.handle_control("cross")
+        th.join(2)
+        self.assertEqual(result, {"d": "allow"})
+
+    def test_a_scripted_press_does_not_answer_a_request(self):
+        self.d.dev = object()
+        th, result = self.ask()
+        self.d.approvals[0].created -= 1
+        self.d.handle_control("cross", injected=True)  # `padpilot press cross`
+        self.assertEqual(len(self.d.approvals), 1)
+        self.d.cfg["scripted_input_answers_permission"] = True  # test scripts may opt in
+        self.d.handle_control("cross", injected=True)
+        th.join(2)
+        self.assertEqual(result, {"d": "allow"})
+
+    def test_practice_mode_hands_requests_to_the_screen(self):
+        self.d.dev = object()
+        th, result = self.ask()
+        w = Target("watch", "", "", FakeConn())
+        self.d.add_watcher(w, practice=True)  # a request already waiting goes to the screen
+        th.join(2)
+        self.assertEqual(result, {"d": None})
+        t = time.monotonic()  # and a new one is not held at all
+        self.assertIsNone(self.d.request_approval({"source": "claude", "session": "s9", "timeout": 5, "data": {}}))
+        self.assertLess(time.monotonic() - t, 0.5)
+
+    def test_no_controller_does_not_delay_a_request(self):
+        d = Daemon(C.load_config(), object(), desktop=NO_DESKTOP, mic_probe=lambda: False,
+                   resolver=make_resolver())  # hidapi is there, the controller is not
+        d.started -= 10  # not the daemon's first seconds
+        t = time.monotonic()
+        self.assertIsNone(d.request_approval({"source": "claude", "session": "s9", "timeout": 45, "data": {}}))
+        self.assertLess(time.monotonic() - t, 0.5)
+
+    def test_enter_does_not_confirm_a_prompt_that_just_appeared(self):
+        a, b = FakeConn(), FakeConn()
+        self.d.attach(Target("w-a", "claude", "a", a))
+        self.d.attach(Target("w-b", "claude", "b", b))
+        self.ev("PermissionRequest", wrapper="w-a")  # focus jumps to a
+        self.d.handle_control("cross")  # ✕ was meant for b
+        self.assertEqual((a.sent, b.sent), ([], []))
+        self.d.handle_control("down")  # other keys still reach the prompt
+        self.assertIn(b'"down"', a.sent[-1])
+        self.d.sessions["w-a"].since -= 1  # a moment later
+        n = len(a.sent)
+        self.d.handle_control("cross", injected=True)  # a scripted press is no answer either
+        self.assertEqual(len(a.sent), n)
+        self.d.handle_control("cross")
+        self.assertIn(b'"enter"', a.sent[-1])
+        self.assertEqual(self.d.sessions["w-a"].state, "tool")
+
+    def test_socket_presses_and_text_do_not_answer_a_request(self):
+        from padpilot.daemon import _serve_conn
+        import threading
+        conn = FakeConn()
+        self.d.attach(Target("w-a", "claude", "a", conn))
+        self.ev("PermissionRequest", wrapper="w-a")
+        self.d.sessions["w-a"].since -= 1
+        ours, theirs = socket.socketpair()
+        th = threading.Thread(target=_serve_conn, args=(self.d, theirs), daemon=True)
+        th.start()
+        try:
+            f = ours.makefile("rb")
+            ours.sendall(b'{"op": "send", "text": "1"}\n')
+            self.assertEqual(json.loads(f.readline()), {"ok": False})
+            ours.sendall(b'{"op": "control", "name": "cross"}\n')
+            self.assertEqual(json.loads(f.readline()), {"ok": True})
+            self.assertEqual(conn.sent, [])
+            self.ev("PostToolUse", wrapper="w-a")  # answered on the keyboard: text goes through again
+            ours.sendall(b'{"op": "send", "text": "hi"}\n')
+            self.assertEqual(json.loads(f.readline()), {"ok": True})
+            self.assertIn(b'"text": "hi"', conn.sent[-1])
+        finally:
+            ours.close()
+            th.join(2)
 
 
 class DesktopKeysTest(unittest.TestCase):
@@ -615,6 +717,7 @@ class DesktopKeysTest(unittest.TestCase):
         self.front = self.CLAUDE
         d.handle_event({"op": "event", "source": "claude", "event": "PermissionRequest", "session": "s2",
                         "wrapper": "w-a", "data": {"tool_name": "Bash"}})
+        d.sessions["w-a"].since -= 1  # the prompt has been up for a moment
         n = len(conn.sent)
         d.handle_control("cross")
         self.assertEqual(len(conn.sent), n + 1)

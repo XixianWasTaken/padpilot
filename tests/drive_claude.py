@@ -70,13 +70,15 @@ step("wrapper attached", any(t["agent"] == "claude" for t in json.loads(ds("stat
 ds("send", "Use the Bash tool to run exactly this command: touch padpilot-proof.txt   Then reply with the single word: finished")
 got = pump(60, r"Do you want to proceed|Allow|proceed\?")
 step("permission dialog shown", got)
-time.sleep(0.5)
+time.sleep(1.0)  # a press within approval_grace_ms of the prompt does not answer it
 st = states(); print("   states:", st)
 step("daemon state = permission", any(s[1] == "permission" for s in st))
+# A scripted press answers a permission request only with "scripted_input_answers_permission": true
+# in ~/.padpilot/config.json (then `padpilot stop`); by default only the real controller does.
 ds("press", "r2_full")
 pump(60, r"finished")
 pump(3)
-step("file created after R2 approval", os.path.exists(proof))
+step("file created after R2 approval (needs scripted_input_answers_permission: true)", os.path.exists(proof))
 st = states(); print("   states:", st)
 step("daemon state = done", any(s[1] == "done" for s in st))
 if KITTY:
