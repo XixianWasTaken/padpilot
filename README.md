@@ -98,8 +98,8 @@ Put only what you want to change in `~/.padpilot/config.json`; it is merged over
 {
   "brightness": 0.6,
   "rumble_scale": 0.5,
-  "prompt_wheel": ["continue", "run the tests and fix failures", "explain what you just did", "stop and ask me first",
-                   "commit", "write tests for this", "summarise the changes", "keep fixing this bug"],
+  "prompt_wheel": ["继续", "运行测试并修复失败的用例", "解释一下你刚才做了什么", "先停下来，问我再继续",
+                   "提交代码", "给这部分写测试", "总结一下改动", "继续修这个 bug"],
   "mapping": { "triangle": ["text:continue, then run the tests", "act:submit"] }
 }
 ```

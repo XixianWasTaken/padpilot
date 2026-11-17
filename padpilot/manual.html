@@ -383,20 +383,20 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
   <section class="ch pixbox" id="moves">
     <h2><span class="no">05</span><span class="zh">进阶招式</span><span class="en">Pro moves</span></h2>
     <h3><span class="zh">快捷语轮盘：按住 △ + 右摇杆</span><span class="en">Prompt wheel: hold △ + right stick</span></h3>
-    <p class="zh">按住 △，把右摇杆推向一个方向，松开 △：清空输入框，填进那句话（不发送，你可以再改，按 ✕ 发出）。拨到新方向时轻震一下，光条变成那个方向的颜色。</p>
+    <p class="zh">按住 △，把右摇杆推向一个方向，松开 △：清空输入框，填进那句话（不发送，你可以再改，按 ✕ 发出）。默认是英文，和 △ 短按输入的 <code>continue</code> 一样。拨到新方向时轻震一下，光条变成那个方向的颜色。</p>
     <p class="en">Hold △, push the right stick one way, let go of △: the input box is cleared and that prompt is filled in (not sent, so you can edit it; ✕ sends). Each new direction gives a small tick and its own lightbar colour.</p>
     <div class="wheel" aria-label="Prompt wheel">
-      <div><span><i>↖</i><span class="zh">继续修这个 bug</span><span class="en">keep fixing this bug</span></span></div>
-      <div><span><i>↑</i><span class="zh">继续</span><span class="en">continue</span></span></div>
-      <div><span><i>↗</i><span class="zh">运行测试并修复失败的用例</span><span class="en">run the tests and fix failures</span></span></div>
-      <div><span><i>←</i><span class="zh">总结一下改动</span><span class="en">summarise the changes</span></span></div>
+      <div><span><i>↖</i><span class="zh">keep fixing this bug<br><small>继续修这个 bug</small></span><span class="en">keep fixing this bug</span></span></div>
+      <div><span><i>↑</i><span class="zh">continue<br><small>继续</small></span><span class="en">continue</span></span></div>
+      <div><span><i>↗</i><span class="zh">run the tests and fix failures<br><small>运行测试并修复失败的用例</small></span><span class="en">run the tests and fix failures</span></span></div>
+      <div><span><i>←</i><span class="zh">summarise the changes<br><small>总结一下改动</small></span><span class="en">summarise the changes</span></span></div>
       <div class="hub">△</div>
-      <div><span><i>→</i><span class="zh">解释一下你刚才做了什么</span><span class="en">explain what you just did</span></span></div>
-      <div><span><i>↙</i><span class="zh">给这部分写测试</span><span class="en">write tests for this</span></span></div>
-      <div><span><i>↓</i><span class="zh">提交代码</span><span class="en">commit</span></span></div>
-      <div><span><i>↘</i><span class="zh">先停下来，问我再继续</span><span class="en">stop and ask me first</span></span></div>
+      <div><span><i>→</i><span class="zh">explain what you just did<br><small>解释一下你刚才做了什么</small></span><span class="en">explain what you just did</span></span></div>
+      <div><span><i>↙</i><span class="zh">write tests for this<br><small>给这部分写测试</small></span><span class="en">write tests for this</span></span></div>
+      <div><span><i>↓</i><span class="zh">commit<br><small>提交代码</small></span><span class="en">commit</span></span></div>
+      <div><span><i>↘</i><span class="zh">stop and ask me first<br><small>先停下来，问我再继续</small></span><span class="en">stop and ask me first</span></span></div>
     </div>
-    <p class="tip"><span class="zh">这 8 句可以在设置里的 <code>"prompt_wheel"</code> 改成你自己的。</span><span class="en">Change the eight prompts with <code>"prompt_wheel"</code> in the settings.</span></p>
+    <p class="tip"><span class="zh">这 8 句可以在设置里的 <code>"prompt_wheel"</code> 改成你自己的，用中文也行（第 10 章有例子）。</span><span class="en">Change the eight prompts with <code>"prompt_wheel"</code> in the settings.</span></p>
 
     <h3><span class="zh">重试：R3</span><span class="en">Retry: R3</span></h3>
     <p class="zh">不小心中断了，或者想再跑一遍：按 <b>R3</b>（按下右摇杆），把你上一条消息原样再发一次。桌面 app 里只填进输入框不发送，因为它不告诉我们屏幕上是哪个会话，你看一眼再按 ✕。agent 还在干活时按 R3 会“不行”两下短震；你确定它已经停了（比如用鼠标点了停止），2 秒内再按一次就强制重发。</p>
@@ -488,8 +488,8 @@ padpilot stop &amp;&amp; padpilot desktop   <span class="c"># ok = done</span></
   "brightness": 0.6,
   "rumble_scale": 0.5,
   "hook_approval_timeout_s": 0,
-  "prompt_wheel": ["continue", "run the tests and fix failures", "explain what you just did", "stop and ask me first",
-                   "commit", "write tests for this", "summarise the changes", "keep fixing this bug"],
+  "prompt_wheel": ["继续", "运行测试并修复失败的用例", "解释一下你刚才做了什么", "先停下来，问我再继续",
+                   "提交代码", "给这部分写测试", "总结一下改动", "继续修这个 bug"],
   "mapping": { "triangle": ["text:continue, then run the tests", "act:submit"] }
 }</code></pre>
     <h3><span class="zh">一个键可以映射成</span><span class="en">A button can map to</span></h3>

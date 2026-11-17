@@ -382,10 +382,14 @@ const LIGHTS = {
   listening:  { rgb: [255, 255, 255], kind: "breathe", per: 1, min: .3, zh: "在听你说", en: "Listening" },
 };
 const WHEEL = [
-  { zh: "继续", en: "Continue" }, { zh: "运行测试并修复失败的用例", en: "Run tests, fix failures" },
-  { zh: "解释一下你刚才做了什么", en: "Explain what you did" }, { zh: "先停下来，问我再继续", en: "Stop and ask me first" },
-  { zh: "提交代码", en: "Commit the code" }, { zh: "给这部分写测试", en: "Write tests for this" },
-  { zh: "总结一下改动", en: "Summarize the changes" }, { zh: "继续修这个 bug", en: "Keep fixing this bug" },
+  { zh: "continue（继续）", en: "continue" },
+  { zh: "run the tests and fix failures（跑测试，修失败）", en: "run the tests and fix failures" },
+  { zh: "explain what you just did（解释刚才做的）", en: "explain what you just did" },
+  { zh: "stop and ask me first（先停下问我）", en: "stop and ask me first" },
+  { zh: "commit（提交）", en: "commit" },
+  { zh: "write tests for this（写测试）", en: "write tests for this" },
+  { zh: "summarise the changes（总结改动）", en: "summarise the changes" },
+  { zh: "keep fixing this bug（接着修 bug）", en: "keep fixing this bug" },
 ];
 const NAMES = { cross: "✕", circle: "○", square: "□", triangle: "△", up: "↑", down: "↓", left: "←", right: "→",
   l1: "L1", r1: "R1", l2_full: "L2", r2_full: "R2", l3: "L3", r3: "R3", ps: "PS", mic: { zh: "麦克风键", en: "Mic" },
@@ -504,9 +508,9 @@ const STEPS = [
     after: [L("c-acc", "🔒 已锁定", "🔒 Locked")], end: "idle" },
   // ---- level 4: pro moves
   { lv: 3, light: "done", wheel: true, expect: ["wheel_pick:4"],
-    say: { zh: "**提示轮盘**：按住 **△** 不放，把摇杆**往下**推，然后松开 △，发出“提交代码”。（用鼠标：按住 △ 往下拖）", en: "**Prompt wheel**: hold **△**, push a stick **down**, then let go of △ to send “Commit the code”. (Mouse: hold △ and drag down.)" },
-    ok: { zh: "8 个方向各一条常用指令，可以在配置里改成你自己的。", en: "Eight directions, eight everyday prompts; change them in the config." },
-    after: [you("提交代码", "Commit the code"), L("c-ok", "✓ Committed 3 files")], end: "done" },
+    say: { zh: "**提示轮盘**：按住 **△** 不放，把摇杆**往下**推，然后松开 △，发出 “commit”（提交）。（用鼠标：按住 △ 往下拖）", en: "**Prompt wheel**: hold **△**, push a stick **down**, then let go of △ to send “commit”. (Mouse: hold △ and drag down.)" },
+    ok: { zh: "8 个方向各一条常用指令，默认是英文，可以在配置里改成你自己的（中文也行）。", en: "Eight directions, eight everyday prompts; change them in the config." },
+    after: [you("commit", "commit"), L("c-ok", "✓ Committed 3 files")], end: "done" },
   { lv: 3, light: "permission", rumble: true, show: [L("c-warn", "另一个会话 web-app 在等你批准", "Another session, web-app, wants approval")], expect: ["rstick_right", "rstick_left"],
     say: { zh: "你同时开着两个会话，另一个在等批准。把**右摇杆往右**推，切过去。", en: "You have two sessions open and the other one needs approval. Push the **right stick right** to switch." },
     q: { zh: "另一个会话在等批准，切过去。", en: "Another session needs approval. Switch to it." },

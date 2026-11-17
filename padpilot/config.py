@@ -103,9 +103,10 @@ DEFAULTS = {
                         "sounds_on": "Pop"}},
     # Hold triangle, point the right stick at one of 8 directions (up first, clockwise),
     # release: the prompt is typed into the message box (not sent). Tap triangle = continue.
+    # English, like the rest of what the buttons type; put prompts in any language in the config.
     "prompt_wheel": [
-        "继续", "运行测试并修复失败的用例", "解释一下你刚才做了什么", "先停下来，问我再继续",
-        "提交代码", "给这部分写测试", "总结一下改动", "继续修这个 bug",
+        "continue", "run the tests and fix failures", "explain what you just did", "stop and ask me first",
+        "commit", "write tests for this", "summarise the changes", "keep fixing this bug",
     ],
     # Buttons that combine with others ("ps+up", "r1+cross"). Their own tap fires on release,
     # and only if no combo was used.
