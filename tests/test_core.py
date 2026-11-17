@@ -921,6 +921,16 @@ class DesktopKeysTest(unittest.TestCase):
         self.assertEqual(self.posted, [])
         self.assertEqual(self.d.flashes[-1].color, [255, 0, 0])
 
+    def test_only_the_message_box_itself_keeps_focus(self):
+        from padpilot.macos import _is_message_box
+        self.assertTrue(_is_message_box("AXTextArea", "Prompt", False))
+        self.assertFalse(_is_message_box("AXTextArea", "Terminal input", False))  # another text area
+        self.assertFalse(_is_message_box("AXTextField", None, False))  # the browser pane's address bar
+        self.assertFalse(_is_message_box("AXButton", "Prompt", False))
+        # Where the message box has no "Prompt" label, a text area with focus is taken for it.
+        self.assertTrue(_is_message_box("AXTextArea", "Eingabe", True))
+        self.assertFalse(_is_message_box("AXTextField", None, True))
+
     def test_character_keys_follow_the_keyboard_layout(self):
         from padpilot.macos import layout_key_event
         french = {"plain": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}, "cmd": {"a": 12, "q": 0, "z": 13, "w": 6, "d": 2}}

@@ -306,9 +306,11 @@ def frontmost_bundle_id() -> Optional[str]:
 
 # ---------------------------------------------------------------- message box focus
 # Key presses go to whatever has keyboard focus in the app. After a click on the sidebar or a
-# button, typed text is lost and Enter presses that button, so before keys meant for the message
-# box we move focus to it with the Accessibility API. Only roles, labels and the tree's shape are
-# read, never what any element says.
+# button, typed text is lost and Enter presses that button; after a click in another text field
+# (the browser pane's address bar), clear-input empties that field and Enter acts on it. So before
+# keys meant for the message box we move focus to it with the Accessibility API, unless a menu
+# or a dialog is open. Only roles, labels and the tree's shape are read, never what any element
+# says.
 _TEXT_ROLES = ("AXTextArea", "AXTextField", "AXComboBox", "AXSearchField")
 _DIALOG_SUBROLES = ("AXApplicationDialog", "AXDialog", "AXSystemDialog", "AXFloatingWindow")
 _kAXErrorNoValue = -25212
@@ -352,6 +354,7 @@ class _AX:
         self.true = c_void_p.in_dll(cf, "kCFBooleanTrue").value
         self.names: dict = {}
         self.enabled: set = set()  # pids whose web content we asked to expose
+        self.unlabelled: set = set()  # pids whose message box has no "Prompt" label
 
     def _name(self, s: str) -> int:
         if s not in self.names:  # kept for the life of the process
@@ -456,9 +459,18 @@ def _app_pid(bundle_id: str) -> Optional[int]:
         return None
 
 
+def _is_message_box(role: Optional[str], label: Optional[str], unlabelled: bool) -> bool:
+    """Is the focused element the message box itself? It is the text area labelled "Prompt";
+    where the app's message boxes carry no such label (another interface language), any text
+    area may be one."""
+    return role == "AXTextArea" and (label == "Prompt" or unlabelled)
+
+
 def focus_message_box(bundle_id: str) -> str:
-    """Give the app's message box keyboard focus, unless a text field, a menu or a dialog has
-    it. Returns what happened, for the log: "kept ...", "focused", or why it could not."""
+    """Give the app's message box keyboard focus, unless it has it already or a menu or a
+    dialog is open. A text field elsewhere gives focus up too: what the controller types, sends
+    and clears is meant for the message box. Returns what happened, for the log: "kept ...",
+    "focused ...", or why it could not."""
     global _ax
     if not IS_MAC:
         return "not macOS"
@@ -489,7 +501,8 @@ def focus_message_box(bundle_id: str) -> str:
             return "no focused element"
         held.append(focused)
         role = a.text(focused, "AXRole")
-        if role in _TEXT_ROLES:
+        label = a.text(focused, "AXDescription") if role == "AXTextArea" else None
+        if _is_message_box(role, label, pid in a.unlabelled):
             return f"kept ({role})"
         chain = a.chain(focused)
         held += chain[:-1]
@@ -506,7 +519,13 @@ def focus_message_box(bundle_id: str) -> str:
         boxes, arrays = a.find_boxes(window)
         held += arrays
         if not boxes:
-            return "no message box found"
+            return f"kept ({role})" if role in _TEXT_ROLES else "no message box found"
+        if any(labelled for _, labelled in boxes):
+            a.unlabelled.discard(pid)
+        else:
+            a.unlabelled.add(pid)  # no "Prompt" label in this app: a text area with focus may be the box
+            if role == "AXTextArea":
+                return f"kept ({role})"
 
         def shared(path):  # how far down the tree it shares with the focused element
             n = 0

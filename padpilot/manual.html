@@ -478,8 +478,8 @@ padpilot stop &amp;&amp; padpilot desktop   <span class="c"># ok = done</span></
   <!-- ===================== 10 config ===================== -->
   <section class="ch pixbox" id="config">
     <h2><span class="no">10</span><span class="zh">设置</span><span class="en">Settings</span></h2>
-    <p class="zh">只把想改的写进 <code>~/.padpilot/config.json</code>，它会合并到默认设置上。改完运行 <code>padpilot stop</code>，下次用到时自动用新设置重启。</p>
-    <p class="en">Put only what you want to change in <code>~/.padpilot/config.json</code>; it is merged over the defaults. Then run <code>padpilot stop</code>, and the daemon restarts with it the next time it is needed.</p>
+    <p class="zh">只把想改的写进 <code>~/.padpilot/config.json</code>，它会合并到默认设置上。改完运行 <code>padpilot stop</code>，下次用到时自动用新设置重启。类型写错的值（比如该填数字的地方填了文字）会用默认值，<code>padpilot doctor</code> 会把它们列出来。</p>
+    <p class="en">Put only what you want to change in <code>~/.padpilot/config.json</code>; it is merged over the defaults. Then run <code>padpilot stop</code>, and the daemon restarts with it the next time it is needed. A value of the wrong kind (text where a number belongs, say) keeps its default; <code>padpilot doctor</code> lists them.</p>
     <pre><code>{
   "brightness": 0.6,
   "rumble_scale": 0.5,

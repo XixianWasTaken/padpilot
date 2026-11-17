@@ -242,7 +242,7 @@ padpilot stop && padpilot desktop   # 授权后再跑一次，显示 ok 就好�
 - 映射的键名可以是组合（`"ps+up"`、`"r1+cross"`，修饰键列表在 `"modifiers"`）、长按（`"create_hold"`）、松开（推送说话的 `"mic_up"`）
 - 以上几种组成的列表：按顺序执行，每步间隔 `sequence_gap_ms`
 
-`profiles.claude`、`profiles.codex`、`profiles.desktop` 可以只给某一个程序覆盖映射，默认都是空的，保证布局处处一致。改完配置后执行 `padpilot stop`，下次用到时会自动用新配置重启。
+`profiles.claude`、`profiles.codex`、`profiles.desktop` 可以只给某一个程序覆盖映射，默认都是空的，保证布局处处一致。改完配置后执行 `padpilot stop`，下次用到时会自动用新配置重启。类型写错的值（比如该填数字的地方填了文字）会用默认值；`padpilot doctor` 会列出这些值，以及不是设置项的键名。
 
 ## 其它命令
 
@@ -292,7 +292,7 @@ padpilot uninstall-codex
   - `venv/`。
 
   `padpilot install-codex` 只在你运行它时才写 `~/.codex/hooks.json`，写之前先备份。
-- **按键（macOS）**：有辅助功能权限时，守护进程用 Quartz CGEvent 给 Claude 桌面 app 发按键。每次发之前都用 `lsappinfo` 确认 Claude app 在最前面，别的 app 在前面时什么都不发。打字、发送、清空、中断（Esc）之前，如果焦点在按钮或侧边栏上，它会用辅助功能接口把焦点移回输入框（焦点在文字框、菜单或对话框里时不动）。为此它会打开 Claude app 的辅助功能树，只读元素的类型和标签，不读里面的文字。快捷键里的字母按你当前键盘布局上的位置发（法语键盘上的 Cmd+A 不会变成 Cmd+Q）；布局由一个很快结束的子进程读取，最多每 3 秒读一次，而且只在发这类键时读。`padpilot run` 则是直接输入到它自己的终端会话里。
+- **按键（macOS）**：有辅助功能权限时，守护进程用 Quartz CGEvent 给 Claude 桌面 app 发按键。每次发之前都用 `lsappinfo` 确认 Claude app 在最前面，别的 app 在前面时什么都不发。打字、发送、清空、中断（Esc）之前，如果焦点在别处（按钮、侧边栏，或者浏览器面板地址栏这类别的文字框），它会用辅助功能接口把焦点移回输入框（菜单或对话框开着时不动）。为此它会打开 Claude app 的辅助功能树，只读元素的类型和标签，不读里面的文字。快捷键里的字母按你当前键盘布局上的位置发（法语键盘上的 Cmd+A 不会变成 Cmd+Q）；布局由一个很快结束的子进程读取，最多每 3 秒读一次，而且只在发这类键时读。`padpilot run` 则是直接输入到它自己的终端会话里。
 - **麦克风**：通过 CoreAudio 查询有没有 app 正在录音，用来点亮手柄的麦克风灯。它从不打开麦克风，也从不录音。
 - **声音**：提示音是 macOS 系统声音，在手柄自带的喇叭上播放（只在 USB 连接时）。
 - **教程和说明书页面**：在 `http://127.0.0.1:8737/` 和 `/manual` 提供，只回应来自这个地址的页面。页面用的字体随 padpilot 一起提供（`padpilot/fonts/`，SIL 开源字体协议），页面不从网上加载任何东西。
@@ -300,7 +300,7 @@ padpilot uninstall-codex
 ## 故障排查
 
 - `padpilot doctor` 会逐项检查 hidapi、手柄、daemon。
-- 日志在 `~/.padpilot/daemon.log` 和 `daemon.stderr`。
+- 日志在 `~/.padpilot/daemon.log`（更早的在 `daemon.log.1`，各 1 MB）和 `daemon.stderr`。
 - macOS 下手柄只能被一个进程打开。Steam、DS4Windows 类工具或其他手柄映射软件占用手柄时，daemon 会打不开它。
 - 蓝牙连接时，daemon 会读取一次 feature report 0x05，把手柄切到完整报告模式；拔掉 USB 后会自动重连。
 

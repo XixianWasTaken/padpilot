@@ -92,7 +92,7 @@ The same button does the same thing in the desktop app, Claude Code and Codex. E
 
 ## Configure
 
-Put only what you want to change in `~/.padpilot/config.json`; it is merged over the defaults in [padpilot/config.py](padpilot/config.py). Then run `padpilot stop`, and the daemon restarts with it the next time it is needed.
+Put only what you want to change in `~/.padpilot/config.json`; it is merged over the defaults in [padpilot/config.py](padpilot/config.py). Then run `padpilot stop`, and the daemon restarts with it the next time it is needed. A value of the wrong kind (text where a number belongs, say) keeps its default; `padpilot doctor` lists such values, and keys that are not settings.
 
 ```json
 {
@@ -138,7 +138,7 @@ Everything runs on your own computer. padpilot has no server and no telemetry, a
   - the `venv/`.
 
   `padpilot install-codex` writes `~/.codex/hooks.json`, after backing it up, only when you run it.
-- **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending, clearing or interrupting (Esc), it uses the Accessibility API to move keyboard focus to the message box if a button or the sidebar has it (a text field, menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. Shortcut letters are posted at the position they have on your keyboard layout (Cmd+A on a French keyboard is not Cmd+Q); a short-lived child process reads the layout, at most every three seconds and only for those keys. `padpilot run` types into its own terminal session instead.
+- **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending, clearing or interrupting (Esc), it uses the Accessibility API to move keyboard focus to the message box if something else has it: a button, the sidebar, or another text field such as the browser pane's address bar (an open menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. Shortcut letters are posted at the position they have on your keyboard layout (Cmd+A on a French keyboard is not Cmd+Q); a short-lived child process reads the layout, at most every three seconds and only for those keys. `padpilot run` types into its own terminal session instead.
 - **Microphone.** It asks CoreAudio whether any app is recording, to light the controller's mic LED. It never opens the microphone and never records audio.
 - **Sound.** Cues are macOS system sounds played on the controller's own speaker (USB only).
 - **Tutorial and manual pages.** Served on `http://127.0.0.1:8737/` and `/manual`, answering only pages from that address. Their fonts come with padpilot (`padpilot/fonts/`, SIL Open Font License), so the pages load nothing from the internet.
@@ -146,7 +146,7 @@ Everything runs on your own computer. padpilot has no server and no telemetry, a
 ## Troubleshooting
 
 - Only one program can open the controller. Steam and other controller mappers can keep the daemon from opening it.
-- Logs: `~/.padpilot/daemon.log` and `daemon.stderr`.
+- Logs: `~/.padpilot/daemon.log` (and `daemon.log.1` with what came before; 1 MB each) and `daemon.stderr`.
 - The daemon keeps the controller to itself, so macOS never sees the PS button (which would otherwise open Apple's Games app). Set `"share_controller": true` if another app needs to read it too.
 
 The full reference (every light, rumble, sound and edge case) is in the [Chinese README](README.zh-CN.md).
