@@ -423,17 +423,19 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
       <li><span class="sym crs">✕</span> 或 R2 扣到底：<b>批准</b></li>
       <li><span class="sym cir">○</span> 或 L2 扣到底：<b>拒绝</b>，拒绝的原因会告诉 agent</li>
       <li><span class="sym tri">△</span>：交回屏幕上的对话框</li>
-      <li>超时或手柄没连：照常显示对话框</li>
-      <li>只有在你用手柄的时候才会等：最近 5 分钟按过手柄，或者你最后碰的是手柄（之后没动过键盘鼠标）。否则直接显示对话框</li>
+      <li>超时或手柄没连：由屏幕上的对话框决定</li>
+      <li>计划也一样：Claude 要离开计划模式时，<span class="sym crs">✕</span> 批准计划，<span class="sym cir">○</span> 驳回。批准后回到进入计划模式之前的模式；别的选项在屏幕上选</li>
+      <li>只有在你用手柄的时候才会等：最近 5 分钟按过手柄，或者你最后碰的是手柄（之后没动过键盘鼠标）。否则只由屏幕上的对话框决定</li>
     </ul>
     <ul class="en">
       <li><span class="sym crs">✕</span> or R2 pulled through: <b>approve</b></li>
       <li><span class="sym cir">○</span> or L2 pulled through: <b>deny</b>; the agent is told why</li>
       <li><span class="sym tri">△</span>: hand it back to the dialog on screen</li>
-      <li>time out, or no controller: the normal dialog appears</li>
-      <li>the wait only happens while you are using the controller: it was pressed in the last 5 minutes, or it is what you touched last (no keyboard or mouse since). Otherwise the dialog appears at once</li>
+      <li>time out, or no controller: the dialog on screen decides</li>
+      <li>a plan too: when Claude asks to leave plan mode, <span class="sym crs">✕</span> approves the plan and <span class="sym cir">○</span> rejects it. The session returns to the mode it had before the plan; the other choices are made on screen</li>
+      <li>the wait only happens while you are using the controller: it was pressed in the last 5 minutes, or it is what you touched last (no keyboard or mouse since). Otherwise the dialog on screen alone decides</li>
     </ul>
-    <p class="tip warn"><span class="zh">这 45 秒里屏幕上不会出现对话框。不想等的话，在设置里把 <code>"hook_approval_timeout_s"</code> 设成 <code>0</code>。有会话在等批准时，焦点自动切过去，所以 ✕ 批准的一定是它。请求刚出现的 0.6 秒内按的不算数，手柄短震两下，再按一次。练习模式下不等手柄，直接出对话框。</span><span class="en">During those 45 seconds there is no dialog on screen. To turn this off, set <code>"hook_approval_timeout_s"</code> to <code>0</code>. When a session asks, the focus jumps to it, so ✕ always approves the one that is asking. A press in the first 0.6 seconds after a request appears does not count: the pad buzzes twice, press again. Practice mode does not wait; the dialog appears at once.</span></p>
+    <p class="tip"><span class="zh">屏幕上的对话框不会被拦下：它和手柄同时等着，谁先答算谁的。在屏幕上先答了，手柄会在那个工具跑完、或这一轮结束时放手。不想让手柄参与审批，在设置里把 <code>"hook_approval_timeout_s"</code> 设成 <code>0</code>。有会话在等批准时，焦点自动切过去，所以 ✕ 批准的一定是它。请求刚出现的 0.6 秒内按的不算数，手柄短震两下，再按一次。练习模式下不等手柄。</span><span class="en">The dialog on screen is not held back: both wait, and the first answer counts. If you answer on screen, the controller lets go once that tool has run or the turn is over. To keep the controller out of approvals, set <code>"hook_approval_timeout_s"</code> to <code>0</code>. When a session asks, the focus jumps to it, so ✕ always approves the one that is asking. A press in the first 0.6 seconds after a request appears does not count: the pad buzzes twice, press again. Practice mode does not wait for the controller.</span></p>
   </section>
 
   <!-- ===================== 07 desktop ===================== -->

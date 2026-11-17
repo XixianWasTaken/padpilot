@@ -675,14 +675,14 @@ class DaemonLogicTest(unittest.TestCase):
         self.d.dev = None
         self.assertIsNone(self.d.request_approval({"source": "claude", "session": "s9", "timeout": 5}))
 
-    def ask(self, d=None, timeout=5):
+    def ask(self, d=None, timeout=5, **data):
         """Start a hook approval request in a thread; returns (thread, result dict)."""
         import threading
         d = d or self.d
         d.last_input = time.monotonic()  # the controller is in use
         result = {}
         th = threading.Thread(target=lambda: result.update(
-            d=d.request_approval({"source": "claude", "session": "s9", "timeout": timeout, "data": {}})))
+            d=d.request_approval({"source": "claude", "session": "s9", "timeout": timeout, "data": data})))
         th.start()
         for _ in range(200):
             if d.approvals or not th.is_alive():
@@ -759,6 +759,56 @@ class DaemonLogicTest(unittest.TestCase):
         t = time.monotonic()  # and a new one is not held at all
         self.assertIsNone(self.d.request_approval({"source": "claude", "session": "s9", "timeout": 5, "data": {}}))
         self.assertLess(time.monotonic() - t, 0.5)
+
+    def ev9(self, event, **data):
+        """An event of the session `ask` asks for."""
+        self.d.handle_event({"op": "event", "source": "claude", "event": event, "session": "s9",
+                             "cwd": "/tmp/proj", "wrapper": None, "data": data})
+
+    def test_a_request_answered_on_screen_is_let_go(self):
+        # The agent's own dialog is up while a request is held. Answered there, the tool runs
+        # and the hook is left waiting: the next ✕ must not go to a request that is gone.
+        self.d.dev = object()
+        self.ev9("PreToolUse", tool_name="Bash", call="k1", tool_use_id="t1")
+        th, result = self.ask(tool_name="Bash", call="k1")
+        self.assertEqual(self.d.approvals[0].call, "t1")  # a request names no call; its PreToolUse did
+        self.ev9("PostToolUse", tool_name="Read", tool_use_id="t0")  # another call of the session ends
+        self.assertEqual(len(self.d.approvals), 1)
+        self.ev9("PostToolUse", tool_name="Bash", tool_use_id="t1")  # allowed on screen: it has run
+        th.join(2)
+        self.assertEqual((result, self.d.approvals), ({"d": None}, []))
+        s = self.d.sessions["claude:s9"]
+        self.assertEqual((s.state, s.calls), ("thinking", {}))
+        # The same for a call that failed, and calls denied on screen do not pile up.
+        self.ev9("PreToolUse", tool_name="Bash", call="k2", tool_use_id="t2")
+        th, result = self.ask(tool_name="Bash", call="k2")
+        self.ev9("PostToolUseFailure", tool_name="Bash", tool_use_id="t2")
+        th.join(2)
+        self.assertEqual((result, self.d.approvals), ({"d": None}, []))
+        for i in range(200):
+            self.ev9("PreToolUse", tool_name="Bash", call=f"k{i}", tool_use_id=f"t{i}")
+        self.assertEqual(len(s.calls), 64)
+        self.assertIn("k199", s.calls)
+        self.ev9("PreToolUse", tool_name="Bash", call="", tool_use_id="t999")  # an input the hook could not name
+        self.assertNotIn("", s.calls)
+        th, result = self.ask(tool_name="Bash", call="")
+        self.assertEqual(self.d.approvals[0].call, "")
+        self.ev9("Stop")
+        th.join(2)
+
+    def test_the_end_of_a_turn_lets_its_requests_go(self):
+        self.d.dev = object()
+        for event, data in (("Stop", {}), ("StopFailure", {}), ("UserPromptSubmit", {}),
+                            ("SessionStart", {"source": "resume"}), ("SessionEnd", {})):
+            th, result = self.ask(tool_name="Bash", call="k1")  # (its PreToolUse was not seen)
+            self.assertEqual(self.d.approvals[0].call, "")
+            self.ev9("PostToolUse", tool_name="Bash", tool_use_id="t1")  # ... so this says nothing
+            self.ev("Stop")  # nor does another session,
+            self.ev9("SessionStart", source="compact")  # or compacting: the turn goes on
+            self.assertEqual(len(self.d.approvals), 1, event)
+            self.ev9(event, **data)
+            th.join(2)
+            self.assertEqual((result, self.d.approvals), ({"d": None}, []), event)
 
     def test_no_controller_does_not_delay_a_request(self):
         d = Daemon(C.load_config(), object(), desktop=NO_DESKTOP, mic_probe=lambda: False,
@@ -1822,6 +1872,56 @@ class HookTest(unittest.TestCase):
         m = self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "Write",
                            "tool_input": {"content": "big"}})
         self.assertNotIn("tool_input", m["data"])
+
+    def test_a_tool_call_is_named_without_passing_its_input_on(self):
+        a = {"file_path": "/a", "content": "secret"}
+        pre = self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_use_id": "t1",
+                             "tool_input": a})
+        ask = self.run_hook({"hook_event_name": "PermissionRequest", "tool_name": "Write", "session_id": "s",
+                             "tool_input": dict(reversed(list(a.items())))})  # a request has no tool_use_id
+        self.assertEqual((pre["data"]["tool_use_id"], ask["data"].get("tool_use_id")), ("t1", None))
+        self.assertRegex(pre["data"]["call"], "^[0-9a-f]{16}$")
+        self.assertEqual(ask["data"]["call"], pre["data"]["call"])  # the same tool and input: the same call
+        other = self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_use_id": "t2",
+                               "tool_input": dict(a, file_path="/b")})
+        self.assertNotEqual(other["data"]["call"], pre["data"]["call"])
+        post = self.run_hook({"hook_event_name": "PostToolUse", "tool_name": "Write", "tool_use_id": "t1",
+                              "tool_input": a, "tool_response": {"ok": True}})
+        self.assertEqual(post["data"], {"tool_name": "Write", "tool_use_id": "t1"})
+        self.assertNotIn("secret", json.dumps([pre, ask, other, post]))
+
+    def answer(self, payload, decision):
+        """What the hook prints when the daemon answers a held request with `decision`."""
+        import contextlib
+        import io
+        from padpilot import hook
+        orig = (hook.client.request, hook.client.start_daemon)
+        hook.client.request = lambda msg, timeout=0: {"decision": decision}
+        hook.client.start_daemon = lambda: None
+        env = {k: os.environ.pop(k, None) for k in self.WHERE}
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                hook._dispatch("claude", dict(payload, hook_event_name="PermissionRequest", session_id="s"))
+        finally:
+            hook.client.request, hook.client.start_daemon = orig
+            os.environ.update({k: v for k, v in env.items() if v is not None})
+        return json.loads(out.getvalue())["hookSpecificOutput"]["decision"] if out.getvalue() else None
+
+    def test_a_plan_is_approved_with_its_input_handed_back(self):
+        # For leaving plan mode Claude Code ignores a bare "allow": the plan stays on screen.
+        plan = {"plan": "1. do it", "planFilePath": "/p.md"}
+        self.assertEqual(self.answer({"tool_name": "ExitPlanMode", "tool_input": plan}, "allow"),
+                         {"behavior": "allow", "updatedInput": plan})
+        self.assertEqual(self.answer({"tool_name": "ExitPlanMode", "tool_input": {}}, "allow"),
+                         {"behavior": "allow", "updatedInput": {}})  # (the desktop app sends no input)
+        self.assertEqual(self.answer({"tool_name": "ExitPlanMode"}, "allow"),
+                         {"behavior": "allow", "updatedInput": {}})
+        self.assertEqual(self.answer({"tool_name": "ExitPlanMode", "tool_input": plan}, "deny"),
+                         {"behavior": "deny", "message": "Denied with the DualSense controller."})
+        self.assertEqual(self.answer({"tool_name": "Bash", "tool_input": {"command": "ls"}}, "allow"),
+                         {"behavior": "allow"})  # any other tool: as before
+        self.assertIsNone(self.answer({"tool_name": "ExitPlanMode", "tool_input": plan}, None))
 
 
 class IOHelpersTest(unittest.TestCase):

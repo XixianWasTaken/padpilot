@@ -4,6 +4,7 @@ Never fails the agent: any error results in exit 0 with no output.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -13,11 +14,23 @@ from . import config as C
 
 START_ON = {"SessionStart", "UserPromptSubmit", "PermissionRequest"}
 KEEP_FIELDS = ("tool_name", "notification_type", "source", "is_interrupt", "error", "trigger", "reason",
-               "transcript_path")
+               "transcript_path", "tool_use_id")
 MAX_PROMPT = 20000
 
 
 QUESTION_TOOL = "AskUserQuestion"  # the multiple-choice question box
+PLAN_TOOL = "ExitPlanMode"         # leaving plan mode: "may I go ahead with this plan?"
+
+
+def call_key(p: dict) -> str:
+    """Names a tool call by its tool and input, without passing the input on. A permission
+    request carries no tool_use_id, but the same tool and input as the PreToolUse just before
+    it, which does: that is how the daemon tells which call a request is for."""
+    try:
+        raw = json.dumps([p.get("tool_name"), p.get("tool_input")], sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return ""
+    return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()[:16]
 
 
 def question_input(ti) -> dict:
@@ -84,6 +97,8 @@ def _dispatch(source: str, p: dict) -> None:
     # The options of a question box, so R1 + face buttons can pick them.
     if event == "PreToolUse" and p.get("tool_name") == QUESTION_TOOL and isinstance(ti, dict):
         msg["data"]["tool_input"] = question_input(ti)
+    if event in ("PreToolUse", "PermissionRequest") and p.get("tool_name"):
+        msg["data"]["call"] = call_key(p)  # ("" if the input cannot be named: then it is not used)
     if event in START_ON:
         client.start_daemon()
 
@@ -101,6 +116,11 @@ def _dispatch(source: str, p: dict) -> None:
                 d = {"behavior": decision}
                 if decision == "deny":
                     d["message"] = "Denied with the DualSense controller."
+                elif p.get("tool_name") == PLAN_TOOL:
+                    # Claude Code takes "allow" for a plan only with the tool's input handed
+                    # back; a bare "allow" leaves the plan waiting on screen (2.1.325 and
+                    # 2.1.326, tested). The session then returns to the mode it had before.
+                    d["updatedInput"] = ti if isinstance(ti, dict) else {}
                 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": d}}))
             return
     client.request(msg, timeout=0.5)

@@ -47,6 +47,9 @@ STALE_SESSION_S = 30 * 60   # hook-only session without events
 STALE_KEPT_S = 12 * 3600    # ... when its turn is finished and it waits for you (green light, card)
 STUCK_BUSY_S = 10 * 60      # 'thinking' with no event at all for this long -> idle
 BUSY = ("thinking", "tool", "compacting", "permission")
+# After these a session's turn is over (or begins anew): no request of it is open any more.
+TURN_OVER = ("SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "Interrupt", "AgentTurnComplete")
+MAX_CALLS = 64  # tool calls remembered per session (those denied on screen never report back)
 # PS combos that change a saved setting; practice mode only shows them.
 SETTING_ACTIONS = ("@brightness_up", "@brightness_down", "@rumble_up", "@rumble_down", "@sounds", "@idle_light")
 
@@ -114,6 +117,8 @@ class Session:
         # An open question box (AskUserQuestion): [{"options": [label], "multiSelect": bool}].
         self.questions: List[dict] = []
         self.questions_at = 0.0
+        # Tool calls that have started and not finished: call key (hook.call_key) -> tool_use_id.
+        self.calls: Dict[str, str] = {}
         self.reminded = False
         self.transcript: Optional[str] = None
         # Where it runs, as its hooks say: the entry point ("claude-desktop", "cli", ...; "" if
@@ -173,9 +178,10 @@ class Target:
 
 
 class Approval:
-    def __init__(self, session_key: str, tool: str):
+    def __init__(self, session_key: str, tool: str, call: str = ""):
         self.session_key = session_key
         self.tool = tool
+        self.call = call  # the tool_use_id of the call it is for ("": not known)
         self.event = threading.Event()
         self.decision: Optional[str] = None
         self.created = time.monotonic()
@@ -481,6 +487,7 @@ class Daemon:
             if msg.get("wrapper") and self._nested_event(msg["wrapper"], msg.get("session") or "", ev, data):
                 return  # an agent started inside a `padpilot run` session: not that session's event
             if ev == "SessionEnd":
+                self._let_go(key, None, "the session ended")
                 self.sessions.pop(key, None)
                 return
             s = self._session(key, source, label)
@@ -491,6 +498,10 @@ class Daemon:
                 s.attended = msg["attended"]
             if isinstance(data.get("transcript_path"), str):
                 s.transcript = data["transcript_path"]
+            if ev in TURN_OVER and not (ev == "SessionStart" and data.get("source") == "compact"):
+                # (after compacting the turn goes on)
+                s.calls.clear()
+                self._let_go(key, None, "its turn is over")
             if ev == "SessionStart":
                 # After compacting, the turn goes on: keep the state.
                 if s.state not in ("idle", "done") and data.get("source") != "compact":
@@ -506,6 +517,11 @@ class Daemon:
             elif ev == "PreToolUse":
                 s.tools += 1
                 s.tool = data.get("tool_name")
+                if data.get("call") and isinstance(data["call"], str) and isinstance(data.get("tool_use_id"), str):
+                    s.calls.pop(data["call"], None)
+                    s.calls[data["call"]] = data["tool_use_id"]  # (the newest last)
+                    while len(s.calls) > MAX_CALLS:
+                        del s.calls[next(iter(s.calls))]
                 if s.state != "permission":
                     self.set_state(s, "tool")
                 kind = self._tool_kind(s.tool) or {}
@@ -525,11 +541,13 @@ class Daemon:
                         rumble = "choices"
                 self._flash("tool_start", kind.get("color"), rumble)
             elif ev in ("PostToolUse", "PostToolBatch"):
+                self._call_over(s, data)
                 if data.get("tool_name") == QUESTION_TOOL:
                     s.questions = []
                 if s.state in ("tool", "permission", "waiting", "idle"):
                     self.set_state(s, "thinking")
             elif ev == "PostToolUseFailure":
+                self._call_over(s, data)
                 if data.get("tool_name") == QUESTION_TOOL:
                     s.questions = []
                 if data.get("is_interrupt"):
@@ -610,6 +628,25 @@ class Daemon:
         self.wrapper_owner[wid] = sid
         return False
 
+    def _call_over(self, s: Session, data: dict) -> None:
+        """A tool call has run (or failed): a request still held for it was answered on screen."""
+        tid = data.get("tool_use_id")
+        if isinstance(tid, str) and tid:
+            for k in [k for k, v in s.calls.items() if v == tid]:
+                del s.calls[k]
+            self._let_go(s.key, tid, "answered on screen")
+
+    def _let_go(self, key: str, call: Optional[str], why: str) -> None:
+        """Stop holding the session's permission requests (`call`: only the one for that tool
+        call). The agent's own dialog is on screen while a request is held, and whichever is
+        answered first counts; when that is the dialog, Claude Code leaves the hook waiting
+        (2.1.325, tested). Without this the next ✕ or ○ would go to a request that is no longer
+        open, and do nothing else. (Call with the lock held.)"""
+        for a in [a for a in self.approvals if a.session_key == key and call in (None, a.call)]:
+            self.approvals.remove(a)
+            a.event.set()
+            log.info("permission request for %s no longer held: %s", a.tool or "a tool", why)
+
     def _attention(self, s: Session, key: str) -> None:
         self.set_state(s, "permission")
         if self.cfg.get("attention_steals_focus") and any(t.id == key for t in self.targets):
@@ -637,7 +674,10 @@ class Daemon:
             if not self._pad_in_use():
                 log.info("permission request not held: the controller is not what is being used")
                 return None
-            a = Approval(key, (msg.get("data") or {}).get("tool_name", ""))
+            data = msg.get("data") or {}
+            s, ck = self.sessions.get(key), data.get("call")
+            call = s.calls.get(ck, "") if s is not None and ck and isinstance(ck, str) else ""
+            a = Approval(key, data.get("tool_name", ""), call)
             self.approvals.append(a)
         a.event.wait(timeout)
         with self.lock:
