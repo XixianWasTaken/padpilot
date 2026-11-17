@@ -1,6 +1,7 @@
 """The daemon owns the controller. It turns agent events into light/rumble/trigger feedback and
 forwards controller input to the focused `padpilot run` wrapper as keystrokes, or (macOS, no
-wrapper attached) to an allowed frontmost desktop app as real key presses.
+wrapper attached) to an allowed frontmost desktop app as real key presses. A question box open in
+the desktop app in front takes its own buttons even while a wrapper is attached.
 
 Protocol: newline-delimited JSON over a Unix socket (see client.py).
 """
@@ -541,7 +542,7 @@ class Daemon:
                 if not self.locked:
                     self._play("tick")  # hold reached / wheel moved to another direction
                 return
-            target = self._focused()
+            target = self._question_box_takes(name, self._focused())
             mapping = self._mapping_for(target)
             if name.startswith("wheel_pick:"):
                 action = self._wheel_steps(int(name.split(":", 1)[1]))
@@ -670,6 +671,25 @@ class Daemon:
         for s in self.sessions.values():
             if s.state == "done":
                 self.set_state(s, "idle")
+
+    def _question_box_takes(self, name: str, target: Optional[Target]) -> Optional[Target]:
+        """A `padpilot run` session gets every button, but a question box open in the Claude app
+        in front takes its own buttons (R1 + face button, Submit): None sends them there. Not
+        while the terminal session is asking or waiting itself."""
+        if target is None or not self._desktop_enabled() or self._question_session() is None:
+            return target
+        mine = self.sessions.get(target.id)
+        if mine is not None and (mine.questions or mine.state in ("permission", "waiting")):
+            return target
+        action = self._mapping_for(None).get(name)
+        steps = split_action(action) if isinstance(action, (str, list)) else []
+        if not (steps == ["act:submit"] or (len(steps) == 1 and steps[0].startswith("@choose:"))):
+            return target
+        try:
+            front = self.desktop[0]()
+        except Exception:  # noqa: BLE001 - lsappinfo failing must not stop the terminal's keys
+            return target
+        return None if front in (self.cfg.get("desktop") or {}).get("apps", []) else target
 
     def _question_session(self) -> Optional[Session]:
         """The desktop session with an open question box, if any."""

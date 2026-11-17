@@ -587,6 +587,40 @@ class DesktopKeysTest(unittest.TestCase):
         self.assertEqual(self.posted, [])
         self.assertIn(b'"enter"', conn.sent[-1])
 
+    def test_question_box_in_front_takes_its_buttons_from_the_terminal(self):
+        calls = []
+        fake = (lambda: self.front, lambda prompt=False: True, lambda items, gap: self.posted.append(items))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(),
+                   desktop_question=lambda app, qs, pick: calls.append(pick) or "ok")
+        conn = FakeConn()
+        d.attach(Target("w-a", "claude", "a", conn))
+        qs = [{"multiSelect": False, "options": ["A", "B"]}]
+        d.handle_event({"op": "event", "source": "claude", "event": "PreToolUse", "session": "s1",
+                        "data": {"tool_name": "AskUserQuestion", "tool_input": {"questions": qs}}})
+        d.handle_control("r1+circle")  # option 2 of the box
+        d.handle_control("cross")      # its Submit
+        d.handle_control("down")       # other buttons stay with the terminal
+        for _ in range(100):
+            if len(calls) >= 2:
+                break
+            time.sleep(0.01)
+        self.assertEqual(calls, [2, None])
+        self.assertEqual(len(conn.sent), 1)
+        self.assertIn(b'"down"', conn.sent[0])
+        # Another app in front: the terminal gets ✕.
+        self.front = "com.apple.Terminal"
+        d.handle_control("cross")
+        self.assertIn(b'"enter"', conn.sent[-1])
+        # The terminal session asking itself keeps its buttons.
+        self.front = self.CLAUDE
+        d.handle_event({"op": "event", "source": "claude", "event": "PermissionRequest", "session": "s2",
+                        "wrapper": "w-a", "data": {"tool_name": "Bash"}})
+        n = len(conn.sent)
+        d.handle_control("cross")
+        self.assertEqual(len(conn.sent), n + 1)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.posted, [])
+
     def test_esc_resets_desktop_session(self):
         self.d.handle_event({"op": "event", "source": "claude", "event": "UserPromptSubmit", "session": "s9",
                              "cwd": "/tmp/p", "data": {}})

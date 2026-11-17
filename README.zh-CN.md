@@ -198,7 +198,7 @@ Claude 桌面端、IDE 或直接运行的 `claude` / `codex` 没有 PTY 可以�
 
 ## 桌面 app（macOS）
 
-没有 `padpilot run` 会话时，daemon 会把按键模拟成真实的键盘按下，发给**最前面的 Claude 桌面 app**（`com.anthropic.claudefordesktop`）。别的 app 在前面时不发，手柄光条红闪一下表示没送达。
+没有 `padpilot run` 会话时，daemon 会把按键模拟成真实的键盘按下，发给**最前面的 Claude 桌面 app**（`com.anthropic.claudefordesktop`）。别的 app 在前面时不发，手柄光条红闪一下表示没送达。有 `padpilot run` 会话时按键都发给终端，只有一个例外：Claude 桌面 app 在最前面、里面开着提问框、而终端那边没有在提问或等待时，R1 + 面键和提交键（✕、R2）会去回答桌面 app 的提问框。
 
 第一次使用要给权限：
 

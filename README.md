@@ -46,7 +46,7 @@ alias cx='padpilot run codex'    # Codex CLI
 
 `padpilot run` wraps the agent in a terminal that looks and works exactly as before; the controller's buttons become keystrokes. Without the wrapper (an IDE, or the agent started directly) the lights and rumble still work, and permission requests wait up to 45 seconds for ✕ (approve) or ○ (deny) before the normal dialog appears.
 
-**Claude desktop app (macOS).** When no `padpilot run` session is open, buttons are sent as real key presses to the Claude app, but only while it is the frontmost window. The first time, run `padpilot desktop` and allow Accessibility access for the daemon's Python.
+**Claude desktop app (macOS).** When no `padpilot run` session is open, buttons are sent as real key presses to the Claude app, but only while it is the frontmost window. While a `padpilot run` session is open the buttons go to it, with one exception: when the Claude app is in front with a question box open, and the terminal session is not asking or waiting itself, R1 + face button and Submit (✕, R2) answer that box. The first time, run `padpilot desktop` and allow Accessibility access for the daemon's Python.
 
 ## What the controller tells you
 
