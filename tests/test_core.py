@@ -333,6 +333,116 @@ class DaemonLogicTest(unittest.TestCase):
         # null still unbinds a control
         self.assertIsNone(C.deep_merge(C.DEFAULTS, {"mapping": {"cross": None}})["mapping"]["cross"])
 
+    def test_config_values_of_the_wrong_kind_keep_the_defaults_and_are_reported(self):
+        problems = []
+        cfg = C.deep_merge(C.DEFAULTS, {
+            "hold_ms": "600",            # text where a number belongs: this used to leave every button dead
+            "idle_light": 1,             # a number where true or false belongs
+            "brightness": 0.5, "repeat_rate_ms": 50.5, "rumble_levels": [0, 0.5, 1],  # fine
+            "progress_leds": [1, "x"],   # a list of numbers stays one
+            "approve_buttons": "cross",
+            "hold_m": 5,                 # a typo
+            "_note": "mine",             # a comment
+            "sounds": {"volume": "loud", "cues": {"done": "Hero"}},
+            "mapping": {"cross": 5, "circle": None, "square": ["esc", "esc"], "my_combo": "enter"},
+            "profiles": {"codex": {"cross": 7, "circle": "ctrl+c"}, "mine": "x", "vim": {"cross": ":w"}},
+        }, problems=problems)
+        D = C.DEFAULTS
+        self.assertEqual((cfg["hold_ms"], cfg["idle_light"], cfg["progress_leds"], cfg["approve_buttons"]),
+                         (D["hold_ms"], D["idle_light"], D["progress_leds"], D["approve_buttons"]))
+        self.assertEqual((cfg["brightness"], cfg["repeat_rate_ms"], cfg["rumble_levels"]), (0.5, 50.5, [0, 0.5, 1]))
+        self.assertEqual((cfg["sounds"]["volume"], cfg["sounds"]["cues"]["done"]), (D["sounds"]["volume"], "Hero"))
+        self.assertEqual(cfg["mapping"]["cross"], D["mapping"]["cross"])
+        self.assertIsNone(cfg["mapping"]["circle"])
+        self.assertEqual((cfg["mapping"]["square"], cfg["mapping"]["my_combo"]), (["esc", "esc"], "enter"))
+        self.assertEqual(cfg["profiles"]["codex"], {"circle": "ctrl+c"})
+        self.assertEqual(cfg["profiles"]["vim"], {"cross": ":w"})
+        self.assertNotIn("mine", cfg["profiles"])
+        text = "\n".join(problems)
+        for needle in ('"hold_ms" should be a number, not text: using the default',
+                       '"idle_light" should be true or false, not a number',
+                       '"progress_leds" should be a list of numbers',
+                       '"approve_buttons" should be a list of text, not text',
+                       '"hold_m" is not a setting',
+                       '"sounds.volume" should be a number, not text',
+                       '"mapping.cross" should be text, a list of text, or null, not a number: using the default',
+                       '"profiles.codex.cross" should be text, a list of text, or null, not a number: left out',
+                       '"profiles.mine" should be an object, not text: left out'):
+            self.assertIn(needle, text)
+        self.assertEqual(len(problems), 9, problems)
+        # The same from the file, the way the daemon and `padpilot doctor` read it.
+        C.CONFIG_PATH.write_text('{"hold_ms": "600", "rumble_scale": 0.6}')
+        try:
+            problems = []
+            cfg = C.load_config(problems)
+            self.assertEqual((cfg["hold_ms"], cfg["rumble_scale"], len(problems)), (D["hold_ms"], 0.6, 1))
+            C.CONFIG_PATH.write_text("{ not json")
+            problems = []
+            self.assertEqual(C.load_config(problems)["hold_ms"], D["hold_ms"])
+            self.assertIn("cannot be read", problems[0])
+        finally:
+            C.CONFIG_PATH.unlink()
+        self.assertEqual(C.load_config([]), C.DEFAULTS)  # and nothing to report without a file
+
+    def test_a_fault_that_repeats_is_logged_once_a_minute(self):
+        import logging
+        from padpilot import daemon as D
+        records = []
+
+        class Keep(logging.Handler):
+            def emit(self, r):
+                records.append(r.getMessage())
+        h = Keep()
+        D.log.addHandler(h)
+        try:
+            D._errors.clear()
+            self.d.cfg["hold_ms"] = "600"  # as if a wrong value had got past the checks
+            st = InputState()
+            st.buttons["cross"] = True
+            for _ in range(250):  # one second of input reports with a button held
+                self.d._handle_input(st, time.monotonic())
+            self.assertEqual(len(records), 1)
+            for seen in D._errors.values():
+                seen[0] -= 61  # a minute later
+            self.d._handle_input(st, time.monotonic())
+            self.assertEqual(len(records), 2)
+            self.assertIn("249 more like it", records[1])
+        finally:
+            D.log.removeHandler(h)
+            D._errors.clear()
+
+    def test_a_bad_message_does_not_end_the_connection(self):
+        from padpilot.daemon import _serve_conn
+        import threading
+        ours, theirs = socket.socketpair()
+        th = threading.Thread(target=_serve_conn, args=(self.d, theirs), daemon=True)
+        th.start()
+        try:
+            f = ours.makefile("rb")
+            ours.sendall(b'[1, 2]\n"text"\n{"op": "rumble", "pattern": [1]}\n')  # not objects; a name that is a list
+            self.assertEqual(json.loads(f.readline()), {"ok": False})
+            ours.sendall(b'{"op": "attach"}\n')  # no wrapper id
+            self.assertEqual(json.loads(f.readline()), {"ok": False})
+            ours.sendall(b'{"op": "ping"}\n')
+            self.assertTrue(json.loads(f.readline())["ok"])
+            self.assertEqual(self.d.targets, [])
+        finally:
+            ours.close()
+            th.join(2)
+
+    def test_odd_tool_kinds_and_a_failing_context_read_do_not_stop_events(self):
+        self.d.cfg["tool_kinds"] = ["Bash", ["^Read$"], [5, {"color": [1, 2, 3]}], ["^Bash$", {"color": [9, 9, 9]}]]
+        self.ev("UserPromptSubmit")
+        self.ev("PreToolUse", tool_name="Bash")
+        self.assertEqual(self.d._tool_kind("Bash"), {"color": [9, 9, 9]})
+        self.d.frame(time.monotonic())
+
+        def broken(s):
+            raise ValueError("a transcript of another shape")
+        self.d._update_context = broken
+        self.ev("Stop")
+        self.assertEqual(self.d.sessions["claude:s1"].state, "done")
+
     def test_a_bad_mapping_does_not_kill_the_input_loop(self):
         self.d.cfg["mapping"]["cross"] = 5
         self.assertIsNone(self.d._guarded(self.d.handle_control, "cross"))

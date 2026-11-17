@@ -12,6 +12,7 @@ import fcntl
 import math
 import json
 import logging
+import logging.handlers
 import os
 import queue
 import re
@@ -20,6 +21,7 @@ import signal
 import socket
 import statistics
 import struct
+import sys
 import threading
 import time
 from typing import Callable, Dict, List, Optional
@@ -52,6 +54,29 @@ SETTING_ACTIONS = ("@brightness_up", "@brightness_down", "@rumble_up", "@rumble_
 # Esc, which interrupts from the message box but not from a focused button (tested). Menus and
 # dialogs keep focus, so Esc still closes them.
 BOX_KEYS = ("enter", "shift+enter", "cmd+enter", "cmd+a", "backspace", "cmd+z", "esc")
+
+
+# (where, kind of exception) -> [when it was last logged, how often it happened since]
+_errors: Dict[tuple, list] = {}
+ERROR_EVERY_S = 60.0
+
+
+def log_error(where: str) -> None:
+    """Log the exception being handled with its traceback, but the same kind in the same place
+    only once a minute; the others are counted. A fault that strikes on every input report or
+    every frame (a wrong value in config.json) would write hundreds of tracebacks a second."""
+    kind = sys.exc_info()[0]
+    key = (where, kind.__name__ if kind else "")
+    now = time.monotonic()
+    seen = _errors.get(key)
+    if seen is not None and now - seen[0] < ERROR_EVERY_S:
+        seen[1] += 1
+        return
+    if len(_errors) > 200:
+        _errors.clear()
+    more = f" ({seen[1]} more like it since the last report)" if seen and seen[1] else ""
+    _errors[key] = [now, 0]
+    log.exception("error in %s%s", where, more)
 
 
 def needs_message_box(items: List[dict]) -> bool:
@@ -384,11 +409,12 @@ class Daemon:
         self._play(rumble or f.get("rumble"))
 
     def _tool_kind(self, tool: Optional[str]) -> Optional[dict]:
-        for pattern, kind in self.cfg.get("tool_kinds") or []:
+        for entry in self.cfg.get("tool_kinds") or []:
             try:
-                if tool and re.search(pattern, tool):
+                pattern, kind = entry
+                if tool and isinstance(kind, dict) and re.search(pattern, tool):
                     return kind
-            except re.error:
+            except (re.error, TypeError, ValueError):  # an entry of another shape: skip it
                 continue
         return None
 
@@ -513,7 +539,10 @@ class Daemon:
                 self.set_state(s, "waiting")
             elif ev == "Stop":
                 s.questions = []
-                self._update_context(s)
+                try:
+                    self._update_context(s)
+                except Exception:  # the context light is a nicety: never at the cost of "done"
+                    log_error("_update_context")
                 long_turn = s.turn_start and time.monotonic() - s.turn_start >= self.cfg.get("celebrate_after_s", 60)
                 self.set_state(s, "done")
                 if long_turn and s.state == "done":
@@ -1148,7 +1177,7 @@ class Daemon:
         try:
             return fn(*args)
         except Exception:
-            log.exception("error in %s", getattr(fn, "__name__", fn))
+            log_error(getattr(fn, "__name__", str(fn)))
             return None
 
     def _handle_input(self, st, now: float) -> None:
@@ -1275,9 +1304,79 @@ def _can(check, key: str) -> bool:
 
 
 # ---------------------------------------------------------------- server
+def _handle_msg(d: Daemon, conn: socket.socket, msg: dict, reply, link: dict) -> None:
+    """One message of a connection. `link["target"]` is the wrapper attached over it, if any."""
+    target: Optional[Target] = link["target"]
+    op = msg.get("op")
+    if op == "event":
+        d.handle_event(msg)
+        reply({"ok": True})
+    elif op == "approval":
+        reply({"decision": d.request_approval(msg)})
+    elif op == "attach":
+        link["target"] = target = Target(msg["wrapper"], msg.get("agent", ""), msg.get("label", ""), conn)
+        d.attach(target)
+        reply({"ok": True, "controller": d.dev is not None})
+    elif op == "local" and target is not None:
+        d.local_input(target.id, msg.get("keys") or [])
+    elif op == "control":  # a scripted press (`padpilot press`), for tests and scripts
+        d.handle_control(msg.get("name", ""), injected=True)
+        reply({"ok": True})
+    elif op == "send":  # type text into the focused wrapper (or desktop app), then Enter
+        items = [{"text": msg.get("text", "")}] + ([] if msg.get("no_enter") else [{"key": "enter"}])
+        with d.lock:
+            t = d._focused()
+            if d.asking(t) and not d._scripted_ok():
+                ok = False  # typed text is not the answer to a permission request
+                log.info("send: refused, the session is asking for permission")
+            elif t is not None:
+                ok = t.send({"op": "type", "gap_ms": d.cfg.get("sequence_gap_ms", 90), "items": items})
+            else:
+                ok = d._desktop_send(items)
+        reply({"ok": ok})
+    elif op == "desktop":  # desktop-key status; prompt=True shows the macOS permission dialog
+        reply(d.desktop_status(prompt=bool(msg.get("prompt"))))
+    elif op == "status":
+        reply(d.status())
+    elif op == "watch":
+        w = Target("watch", "", "", conn)
+        with d.lock:
+            d.add_watcher(w, practice=bool(msg.get("practice")))
+        reply({"ok": True, "controller": d.dev is not None, "practice": bool(msg.get("practice"))})
+    elif op == "demo":
+        with d.lock:
+            d.demo_until = time.monotonic() + float(msg.get("seconds", 3))
+            d._play("success")
+        reply({"ok": True})
+    elif op == "rumble":
+        with d.lock:
+            d._play(msg.get("pattern", "tick"))
+        reply({"ok": True})
+    elif op == "imu":  # debug: accelerometer jitter, used to verify rumble
+        d.imu_samples = []
+        time.sleep(float(msg.get("seconds", 0.5)))
+        xs, d.imu_samples = d.imu_samples, None
+        reply({"n": len(xs), "stdev": round(statistics.pstdev(xs), 1) if len(xs) > 1 else None})
+    elif op == "shutdown":
+        reply({"ok": True})
+        d.running = False
+        try:  # wake the accept loop, so stopping does not wait for its timeout
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(0.2)
+            s.connect(str(C.SOCKET_PATH))
+            s.close()
+        except OSError:
+            pass
+    elif op == "ping":
+        # A client with newer code replaces this daemon (client.start_daemon); it goes
+        # by the code and start time reported here, and waits while a request is held.
+        reply({"ok": True, "pid": os.getpid(), "version": __version__, "code": d.code,
+               "started": d.started_at, "approvals": len(d.approvals)})
+
+
 def _serve_conn(d: Daemon, conn: socket.socket) -> None:
     f = conn.makefile("rb")
-    target: Optional[Target] = None
+    link: dict = {"target": None}
 
     def reply(obj):
         try:
@@ -1291,76 +1390,20 @@ def _serve_conn(d: Daemon, conn: socket.socket) -> None:
                 msg = json.loads(line)
             except ValueError:
                 continue
-            op = msg.get("op")
-            if op == "event":
-                d.handle_event(msg)
-                reply({"ok": True})
-            elif op == "approval":
-                reply({"decision": d.request_approval(msg)})
-            elif op == "attach":
-                target = Target(msg["wrapper"], msg.get("agent", ""), msg.get("label", ""), conn)
-                d.attach(target)
-                reply({"ok": True, "controller": d.dev is not None})
-            elif op == "local" and target is not None:
-                d.local_input(target.id, msg.get("keys") or [])
-            elif op == "control":  # a scripted press (`padpilot press`), for tests and scripts
-                d.handle_control(msg.get("name", ""), injected=True)
-                reply({"ok": True})
-            elif op == "send":  # type text into the focused wrapper (or desktop app), then Enter
-                items = [{"text": msg.get("text", "")}] + ([] if msg.get("no_enter") else [{"key": "enter"}])
-                with d.lock:
-                    t = d._focused()
-                    if d.asking(t) and not d._scripted_ok():
-                        ok = False  # typed text is not the answer to a permission request
-                        log.info("send: refused, the session is asking for permission")
-                    elif t is not None:
-                        ok = t.send({"op": "type", "gap_ms": d.cfg.get("sequence_gap_ms", 90), "items": items})
-                    else:
-                        ok = d._desktop_send(items)
-                reply({"ok": ok})
-            elif op == "desktop":  # desktop-key status; prompt=True shows the macOS permission dialog
-                reply(d.desktop_status(prompt=bool(msg.get("prompt"))))
-            elif op == "status":
-                reply(d.status())
-            elif op == "watch":
-                w = Target("watch", "", "", conn)
-                with d.lock:
-                    d.add_watcher(w, practice=bool(msg.get("practice")))
-                reply({"ok": True, "controller": d.dev is not None, "practice": bool(msg.get("practice"))})
-            elif op == "demo":
-                with d.lock:
-                    d.demo_until = time.monotonic() + float(msg.get("seconds", 3))
-                    d._play("success")
-                reply({"ok": True})
-            elif op == "rumble":
-                with d.lock:
-                    d._play(msg.get("pattern", "tick"))
-                reply({"ok": True})
-            elif op == "imu":  # debug: accelerometer jitter, used to verify rumble
-                d.imu_samples = []
-                time.sleep(float(msg.get("seconds", 0.5)))
-                xs, d.imu_samples = d.imu_samples, None
-                reply({"n": len(xs), "stdev": round(statistics.pstdev(xs), 1) if len(xs) > 1 else None})
-            elif op == "shutdown":
-                reply({"ok": True})
-                d.running = False
-                try:  # wake the accept loop, so stopping does not wait for its timeout
-                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    s.settimeout(0.2)
-                    s.connect(str(C.SOCKET_PATH))
-                    s.close()
-                except OSError:
-                    pass
-            elif op == "ping":
-                # A client with newer code replaces this daemon (client.start_daemon); it goes
-                # by the code and start time reported here, and waits while a request is held.
-                reply({"ok": True, "pid": os.getpid(), "version": __version__, "code": d.code,
-                       "started": d.started_at, "approvals": len(d.approvals)})
+            if not isinstance(msg, dict):
+                continue
+            try:
+                _handle_msg(d, conn, msg, reply, link)
+            except OSError:
+                raise
+            except Exception:  # a message we cannot handle must not end the connection
+                log_error("message %r" % (msg.get("op"),))
+                reply({"ok": False})
     except OSError:
         pass
     finally:
-        if target is not None:
-            d.detach(target)
+        if link["target"] is not None:
+            d.detach(link["target"])
         with d.lock:
             for w in [w for w in d.watchers if w.conn is conn]:
                 d.remove_watcher(w)
@@ -1389,10 +1432,14 @@ def run_daemon(foreground: bool = False) -> int:
         print("padpilot daemon already running")
         return 0
     handlers = [logging.StreamHandler()] if foreground else []
-    try:
-        if C.LOG_PATH.exists() and C.LOG_PATH.stat().st_size > 1_000_000:
-            C.LOG_PATH.unlink()
-        handlers.append(logging.FileHandler(C.LOG_PATH))
+    try:  # daemon.log, and daemon.log.1 with what came before: 2 MB at most
+        handlers.append(logging.handlers.RotatingFileHandler(C.LOG_PATH, maxBytes=1_000_000, backupCount=1))
+    except OSError:
+        pass
+    try:  # our stderr (what Python itself prints, notes from clients) is appended to this file
+        err = C.HOME / "daemon.stderr"
+        if err.stat().st_size > 1_000_000:
+            os.truncate(err, 0)
     except OSError:
         pass
     logging.basicConfig(level=logging.INFO, handlers=handlers,
@@ -1402,7 +1449,10 @@ def run_daemon(foreground: bool = False) -> int:
     except Exception as e:
         log.error("python 'hidapi' module missing (%s); run `padpilot setup`", e)
         hid = None
-    d = Daemon(C.load_config(), hid)
+    problems: List[str] = []
+    d = Daemon(C.load_config(problems), hid)
+    for p in problems:
+        log.warning("config.json: %s", p)
     try:
         d.code = client.code_id()
     except OSError:

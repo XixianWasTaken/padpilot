@@ -5,6 +5,7 @@ import copy
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 HOME = Path(os.environ.get("PADPILOT_HOME") or Path.home() / ".padpilot")
 SOCKET_PATH = HOME / "daemon.sock"
@@ -149,6 +150,9 @@ DEFAULTS = {
     # e.g. Claude desktop / IDE). The hook waits this long for a button, then falls back
     # to the normal on-screen dialog. 0 disables hook approvals.
     "hook_approval_timeout_s": 45,
+    # R3 (retry) is refused while the session sent an event within this many seconds: it is
+    # still running, maybe in another window.
+    "retry_live_s": 8,
     "approve_buttons": ["cross", "r2_full"],
     "deny_buttons": ["circle", "l2_full"],
     "defer_buttons": ["triangle"],
@@ -235,24 +239,84 @@ DEFAULTS = {
 NULL_OK = ("mapping", "profiles")
 
 
-def deep_merge(base, over, null_ok: bool = False):
-    """`over` on top of `base`. A value of the wrong shape (null, or a non-object where an
-    object belongs) keeps the default, so an odd config.json cannot crash the daemon or hooks."""
+def _kind(v) -> str:
+    if isinstance(v, bool):
+        return "true or false"
+    if isinstance(v, (int, float)):
+        return "a number"
+    if isinstance(v, str):
+        return "text"
+    if isinstance(v, list):
+        return "a list"
+    if isinstance(v, dict):
+        return "an object"
+    return "null"
+
+
+def _fits(default, value) -> bool:
+    """Is `value` the kind of thing `default` is? A list of numbers or of text stays one."""
+    if _kind(default) != _kind(value):
+        return False
+    if isinstance(default, list) and default:
+        for kind in ("a number", "text"):
+            if all(_kind(x) == kind for x in default):
+                return all(_kind(x) == kind for x in value)
+    return True
+
+
+def _is_action(v) -> bool:
+    """A mapping value: a step, a list of steps, or null for "nothing bound here"."""
+    return v is None or isinstance(v, str) or (isinstance(v, list) and all(isinstance(x, str) for x in v))
+
+
+def deep_merge(base, over, null_ok: bool = False, problems: Optional[list] = None, path: str = ""):
+    """`over` on top of `base`. A value of the wrong kind keeps the default: null, text where a
+    number belongs ("hold_ms": "600"), a non-object where an object belongs. So an odd
+    config.json cannot crash the daemon or the hooks, or leave the buttons dead. Every such
+    value, and every top-level key that is not a setting, is described in `problems`."""
     out = copy.deepcopy(base)
+
+    def note(text: str) -> None:
+        if problems is not None:
+            problems.append(text)
     if not isinstance(over, dict):
+        if not path:
+            note("the file must hold one object, { ... }: using the defaults")
         return out
     for k, v in over.items():
+        where = f"{path}{k}"
         cur = out.get(k)
         if isinstance(v, dict) and isinstance(cur, dict):
-            out[k] = deep_merge(cur, v, null_ok or k in NULL_OK)
-        elif isinstance(cur, dict) or (v is None and k in out and not null_ok):
-            continue
-        else:
+            out[k] = deep_merge(cur, v, null_ok or k in NULL_OK, problems, where + ".")
+        elif isinstance(cur, dict):
+            note(f'"{where}" should be an object, not {_kind(v)}: using the default')
+        elif path == "profiles.":  # a profile of your own: an object of control -> action
+            if isinstance(v, dict):
+                out[k] = deep_merge({}, v, True, problems, where + ".")
+            else:
+                note(f'"{where}" should be an object, not {_kind(v)}: left out')
+        elif null_ok:  # a control's action, in "mapping" or in a profile
+            if _is_action(v):
+                out[k] = copy.deepcopy(v)
+            else:
+                note(f'"{where}" should be text, a list of text, or null, not {_kind(v)}: '
+                     + ("using the default" if k in out else "left out"))
+        elif k not in out:
+            if not path and not str(k).startswith("_"):  # "_note": "..." is a comment
+                note(f'"{where}" is not a setting (a typo?)')
             out[k] = copy.deepcopy(v)
+        elif _fits(cur, v):
+            out[k] = copy.deepcopy(v)
+        else:
+            want = _kind(cur) + (" of " + ("numbers" if _kind(cur[0]) == "a number" else "text")
+                                 if isinstance(cur, list) and cur and _kind(cur[0]) in ("a number", "text") else "")
+            note(f'"{where}" should be {want}, not {_kind(v)}: using the default')
     return out
 
 
-def load_config() -> dict:
+def load_config(problems: Optional[list] = None) -> dict:
+    """The settings: config.json over the defaults. What is wrong in the file goes to `problems`
+    (the daemon logs it, `padpilot doctor` shows it)."""
     user = {}
     try:
         with open(CONFIG_PATH) as f:
@@ -262,7 +326,9 @@ def load_config() -> dict:
     except Exception as e:  # keep running on a broken config
         import sys
         print(f"padpilot: ignoring invalid {CONFIG_PATH}: {e}", file=sys.stderr)
-    return deep_merge(DEFAULTS, user)
+        if problems is not None:
+            problems.append(f"cannot be read ({e}): using the defaults")
+    return deep_merge(DEFAULTS, user, problems=problems)
 
 
 def ensure_home() -> None:

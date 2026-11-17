@@ -271,6 +271,11 @@ def doctor() -> int:
 
     print(f"python: {sys.executable} {sys.version.split()[0]}")
     line(sys.version_info >= (3, 8), "python >= 3.8")
+    problems = []
+    C.load_config(problems)
+    line(not problems, f"settings in {C.CONFIG_PATH}" + ("" if not problems else " (the daemon runs with the defaults for these):"))
+    for p in problems:
+        print("         " + p)
     line(_venv_has_hid(), f"hidapi installed in {C.VENV_PATH} (fix: padpilot setup)")
     if _venv_has_hid():
         py = str(C.VENV_PATH / "bin" / "python3")
