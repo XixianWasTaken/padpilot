@@ -262,6 +262,15 @@ class Daemon:
                     log.info("question box: %s", res)
                     if res.endswith("submitted"):
                         self.question_submitted_at = time.monotonic()
+                    elif res == "question box not found" and q.get("name"):
+                        # No box on screen: it went away without an event saying so, or it is
+                        # in a session that is not the one on screen. The press must not be
+                        # lost; it does what it does when there is no question box.
+                        with self.lock:
+                            self._press_without_box(q["name"], bool(q.get("injected")))
+                    elif res == "another question box is on screen":
+                        with self.lock:
+                            self._flash("denied")
                     continue
                 if self.desktop_focus is not None and needs_message_box(items):
                     note = self.desktop_focus(app)
@@ -656,9 +665,18 @@ class Daemon:
             if name in self.tracker.push_to_talk:
                 self.ptt_sent[name] = ok
 
-    def _run(self, name: str, steps: List[str], target: Optional[Target], injected: bool = False) -> bool:
+    def _press_without_box(self, name: str, injected: bool) -> None:
+        """A press went to a question box that turned out not to be on screen: handle it again
+        as if there were none. (Call with the lock held.)"""
+        target = self._focused()
+        action = self._mapping_for(target).get(name)
+        steps = split_action(action) if isinstance(action, (str, list)) else []
+        self._run(name, steps, target, injected, box=False)
+
+    def _run(self, name: str, steps: List[str], target: Optional[Target], injected: bool = False,
+             box: bool = True) -> bool:
         """Run a mapping's steps on the focused wrapper or the desktop app. False (and a
-        "denied" buzz) if it could not be done."""
+        "denied" buzz) if it could not be done. `box=False`: leave the question box out."""
         self.after_send: List[Callable[[], None]] = []
         desktop = target is None and self._desktop_enabled()
         dest = "desktop" if target is None else target.agent
@@ -666,14 +684,14 @@ class Daemon:
         out: List[str] = []
         for st in steps:
             if st.startswith("@"):
-                r = self._builtin(st, target)
+                r = self._builtin(st, target, box)
                 if r is False:
                     return self._deny(name, f"{st} cannot run now")
                 out += r or []
             else:
                 out.append(st)
         sess = self.sessions.get(skey) if skey else None
-        qsess = self._question_session() if desktop else None
+        qsess = self._question_session() if desktop and box else None
         if qsess is not None and out == ["act:submit"]:
             out = ["ask:submit"]  # ✕ / R2 press the question box's Submit
         if qsess is not None and len(out) == 1 and out[0].startswith("ask:"):
@@ -682,7 +700,7 @@ class Daemon:
             if self.practice is not None:
                 self._notify({"op": "would_send", "name": name, "dest": dest, "items": [item]})
                 return True
-            if not self._desktop_send([dict(item, at=time.monotonic())]):
+            if not self._desktop_send([dict(item, at=time.monotonic(), name=name, injected=injected)]):
                 return self._deny(name, "Claude app is not in front (or no Accessibility permission)")
             self._play("tick")  # it takes a moment to show on screen: say the press was taken
             return True
@@ -809,7 +827,7 @@ class Daemon:
         elif last == "submit" and s.state == "permission":
             self.set_state(s, "tool")
 
-    def _builtin(self, name: str, target: Optional[Target] = None):
+    def _builtin(self, name: str, target: Optional[Target] = None, box: bool = True):
         """Run a "@..." step. Returns more steps to run, None, or False when it cannot be done."""
         now = time.monotonic()
         if name in SETTING_ACTIONS and self.practice is not None:
@@ -840,7 +858,7 @@ class Daemon:
             self.focus = ids[(i + (1 if name == "@next_session" else -1)) % len(ids)]
             self._flash("focus")
         elif name.startswith("@choose:"):
-            if target is None and self._desktop_enabled() and self._question_session() is not None:
+            if box and target is None and self._desktop_enabled() and self._question_session() is not None:
                 return ["ask:" + name.split(":", 1)[1]]  # an option of the open question box
             # Clicking a reply button sends its label as your message; do the same.
             s = self._reply_session(target)

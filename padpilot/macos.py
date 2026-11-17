@@ -557,8 +557,9 @@ def _focus_in(a, app, el, held: list) -> bool:
     return any(a.cf.CFEqual(x, el) for x in chain)
 
 
-def _question_card(a, window, labels: List[str], arrays: list):
-    """(card, its toggle buttons) of the box whose options start with these labels."""
+def _question_card(a, window, labels: List[str], arrays: list, others: Optional[list] = None):
+    """(card, its toggle buttons) of the box whose options start with these labels. A box with
+    other options that is passed on the way is appended to `others`."""
     found: list = []
     budget = [8000]
 
@@ -581,6 +582,8 @@ def _question_card(a, window, labels: List[str], arrays: list):
                     t.startswith(l) for t, l in zip(titles, labels)):
                 found.append((el, toggles))
                 return
+            if toggles and others is not None:
+                others.append(el)
         for k in a.kids(el, arrays):
             walk(k, depth + 1)
 
@@ -631,12 +634,15 @@ def answer_question(bundle_id: str, questions: List[dict], pick: Optional[int]) 
             return "no window"
         held.append(window)
         card, toggles, q = None, [], None
+        others: list = []
         for q in questions:
-            card, toggles = _question_card(a, window, list(q.get("options") or []), held)
+            card, toggles = _question_card(a, window, list(q.get("options") or []), held, others)
             if card is not None:
                 break
         if card is None:
-            return "question box not found"
+            # No box at all: it was answered or dismissed, or it belongs to a session that is not
+            # on screen. A box with other options: another session's, which we cannot answer.
+            return "another question box is on screen" if others else "question box not found"
         n_opts = len(q.get("options") or [])
         multi = bool(q.get("multiSelect"))
         if pick is not None:

@@ -734,6 +734,50 @@ class DesktopKeysTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(calls, [None, None, 9, 9])
 
+    def test_a_question_box_that_is_not_on_screen_does_not_swallow_presses(self):
+        calls, answer = [], ["question box not found"]
+        fake = (lambda: self.front, lambda prompt=False: True, lambda items, gap: self.posted.append(items))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(),
+                   desktop_question=lambda app, qs, pick: calls.append(pick) or answer[0])
+
+        def ev(event, session, **data):
+            d.handle_event({"op": "event", "source": "claude", "event": event, "session": session, "data": data})
+
+        def wait(n):
+            for _ in range(100):
+                if len(self.posted) >= n:
+                    break
+                time.sleep(0.01)
+            time.sleep(0.05)
+        qs = [{"multiSelect": False, "options": ["A", "B"]}]
+        ev("PreToolUse", "s1", tool_name="AskUserQuestion", tool_input={"questions": qs})
+        # The box went away and no event said so (or s1 is not the session on screen).
+        d.handle_control("cross")
+        wait(1)
+        self.assertEqual((calls, self.posted), ([None], [[{"key": "enter"}]]))  # ✕ is Enter again
+        self.assertEqual(d.sessions["claude:s1"].questions, qs)  # still known, for when it is on screen
+        d.handle_control("r1+cross")  # no card anywhere: refused, as without a question box
+        time.sleep(0.2)
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(d.flashes[-1].color, [255, 0, 0])
+        ev("PreToolUse", "s2", tool_name="mcp__ccd_turn__wrap_up", tool_input={"actions": [{"label": "Yes"}]})
+        d.handle_control("r1+cross")  # another session's card: its reply button is pressed
+        wait(2)
+        self.assertEqual(self.posted[1][2:], [{"text": "Yes"}, {"key": "enter"}])
+        # A terminal session is in use: the press meant for the missing box goes back to it.
+        conn = FakeConn()
+        d.attach(Target("w-a", "claude", "a", conn))
+        d.handle_control("cross")
+        time.sleep(0.2)
+        self.assertIn(b'"enter"', conn.sent[-1])
+        self.assertEqual(len(self.posted), 2)
+        # Another session's box is on screen: nothing is sent anywhere.
+        d.detach("w-a")
+        answer[0] = "another question box is on screen"
+        d.handle_control("cross")
+        time.sleep(0.2)
+        self.assertEqual(len(self.posted), 2)
+
     def test_actions_the_app_lacks_send_nothing(self):
         self.d.handle_control("l1")
         self.d.handle_control("swipe_left")
