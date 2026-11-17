@@ -960,8 +960,18 @@ class Daemon:
             self.last_activity = time.monotonic()
             log.info("attached %s (%s, %s)", t.id, t.agent, t.label)
 
-    def detach(self, tid: str) -> None:
+    def detach(self, t) -> None:
+        """Drop a wrapper whose connection ended: that Target, or by id whichever has it. A
+        wrapper that reconnects is attached again under the same id, and its old connection
+        may be cleaned up only after that: the old Target is then no longer the attached one,
+        and dropping it must not take the new one (and the session's state) with it."""
         with self.lock:
+            if isinstance(t, Target):
+                if not any(x is t for x in self.targets):
+                    return
+                tid = t.id
+            else:
+                tid = t
             self.targets = [x for x in self.targets if x.id != tid]
             self.sessions.pop(tid, None)
             self.wrapper_owner.pop(tid, None)
@@ -1350,7 +1360,7 @@ def _serve_conn(d: Daemon, conn: socket.socket) -> None:
         pass
     finally:
         if target is not None:
-            d.detach(target.id)
+            d.detach(target)
         with d.lock:
             for w in [w for w in d.watchers if w.conn is conn]:
                 d.remove_watcher(w)

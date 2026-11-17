@@ -460,6 +460,32 @@ class DaemonLogicTest(unittest.TestCase):
         self.d.detach("w-a")
         self.assertEqual((self.d.wrapper_owner, self.d.nested), ({}, set()))
 
+    def test_a_reconnected_wrapper_survives_the_cleanup_of_its_old_connection(self):
+        from padpilot.daemon import _serve_conn
+        import threading
+        links = []
+        for _ in range(2):  # the same wrapper attaches twice: it reconnected
+            ours, theirs = socket.socketpair()
+            th = threading.Thread(target=_serve_conn, args=(self.d, theirs), daemon=True)
+            th.start()
+            ours.sendall(b'{"op": "attach", "wrapper": "w-x", "agent": "claude", "label": "x"}\n')
+            self.assertEqual(json.loads(ours.makefile("rb").readline())["ok"], True)
+            links.append((ours, th))
+        self.ev("PermissionRequest", wrapper="w-x")
+        new = self.d.targets[-1]
+        links[0][0].close()  # only now is the old connection cleaned up
+        links[0][1].join(2)
+        self.assertEqual(self.d.targets, [new])
+        self.assertEqual((self.d.focus, self.d.sessions["w-x"].state), ("w-x", "permission"))
+        links[1][0].close()  # the wrapper itself ends
+        links[1][1].join(2)
+        self.assertEqual((self.d.targets, self.d.focus), ([], None))
+        self.assertNotIn("w-x", self.d.sessions)
+        # By id, as before.
+        self.d.attach(Target("w-y", "claude", "y", FakeConn()))
+        self.d.detach("w-y")
+        self.assertEqual(self.d.targets, [])
+
     def test_controls_go_to_focused_wrapper(self):
         a, b = FakeConn(), FakeConn()
         self.d.attach(Target("w-a", "claude", "a", a))
