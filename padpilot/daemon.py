@@ -44,6 +44,12 @@ BUSY = ("thinking", "tool", "compacting", "permission")
 # PS combos that change a saved setting; practice mode only shows them.
 SETTING_ACTIONS = ("@brightness_up", "@brightness_down", "@rumble_up", "@rumble_down", "@sounds", "@idle_light")
 
+# Desktop keys that only do their job in the message box: typing, sending, clearing, undo.
+BOX_KEYS = ("enter", "shift+enter", "cmd+enter", "cmd+a", "backspace", "cmd+z")
+
+
+def needs_message_box(items: List[dict]) -> bool:
+    return any("text" in i or i.get("key") in BOX_KEYS for i in items)
 
 
 def _describe(item: dict) -> str:
@@ -137,7 +143,7 @@ class Approval:
 
 class Daemon:
     def __init__(self, cfg: dict, hid_module=None, desktop=None, mic_probe=None, resolver=None,
-                 settings_path=None, speak=None):
+                 settings_path=None, speak=None, desktop_focus=None):
         self.cfg = cfg
         # Spoken cues on the controller speaker; tests pass a fake (then USB is not required).
         self.speak_any = speak is not None
@@ -151,6 +157,9 @@ class Daemon:
         # Desktop key injection: (frontmost_bundle_id, trusted, post_items); tests pass fakes.
         self.desktop = desktop or (macos.frontmost_bundle_id, macos.accessibility_trusted, macos.post_items)
         self.desktop_fake = desktop is not None
+        # Moves focus to the app's message box (bundle id -> what happened); tests pass a fake.
+        self.desktop_focus = desktop_focus or (None if self.desktop_fake else macos.focus_message_box)
+        self.desktop_focus_note = ""  # last result, for the log only when it changes
         self.desktop_q: Optional[queue.Queue] = None
         self.desktop_warned = False
         self.lock = threading.RLock()
@@ -213,16 +222,21 @@ class Daemon:
             self.desktop_q = queue.Queue()
             threading.Thread(target=self._desktop_worker, daemon=True).start()
         log.info("desktop -> %s", " ".join(_describe(i) for i in items))
-        self.desktop_q.put((items, self.cfg.get("sequence_gap_ms", 90)))
+        self.desktop_q.put((items, self.cfg.get("sequence_gap_ms", 90), app))
         return True
 
     def _desktop_worker(self) -> None:
         front, _, post = self.desktop
         while True:
-            items, gap = self.desktop_q.get()
+            items, gap, app = self.desktop_q.get()
             # Typing can take seconds (or wait behind other presses): stop if the user switched
             # to another app meanwhile, instead of typing into it.
             try:
+                if self.desktop_focus is not None and needs_message_box(items):
+                    note = self.desktop_focus(app)
+                    if not note.startswith("kept") or note != self.desktop_focus_note:
+                        log.info("message box: %s", note)
+                    self.desktop_focus_note = note
                 for i in range(0, len(items), 8):
                     if i:
                         time.sleep(gap / 1000.0)

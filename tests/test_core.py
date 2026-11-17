@@ -507,6 +507,22 @@ class DesktopKeysTest(unittest.TestCase):
         self.wait_posted(2)
         self.assertEqual(self.posted, [[{"key": "enter"}], [{"text": "continue"}, {"key": "enter"}]])
 
+    def test_message_box_gets_focus_before_typing_not_before_arrows(self):
+        calls = []
+        fake = (lambda: self.front, lambda prompt=False: True,
+                lambda items, gap: self.posted.append((list(calls), items)))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(),
+                   desktop_focus=lambda app: calls.append(app) or "focused (was AXButton)")
+        d.handle_control("down")       # arrows act on whatever has focus (menus, lists)
+        d.handle_control("triangle")   # typed text and Enter belong in the message box
+        d.handle_control("square")
+        self.wait_posted(3)
+        self.assertEqual(self.posted, [
+            ([], [{"key": "down"}]),
+            ([self.CLAUDE], [{"text": "continue"}, {"key": "enter"}]),
+            ([self.CLAUDE, self.CLAUDE], [{"key": "cmd+a"}, {"key": "backspace"}]),
+        ])
+
     def test_actions_the_app_lacks_send_nothing(self):
         self.d.handle_control("l1")
         self.d.handle_control("swipe_left")

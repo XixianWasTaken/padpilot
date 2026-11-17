@@ -179,6 +179,204 @@ def frontmost_bundle_id() -> Optional[str]:
     return out.split("=", 1)[1].strip().strip('"') or None
 
 
+# ---------------------------------------------------------------- message box focus
+# Key presses go to whatever has keyboard focus in the app. After a click on the sidebar or a
+# button, typed text is lost and Enter presses that button, so before keys meant for the message
+# box we move focus to it with the Accessibility API. Only roles, labels and the tree's shape are
+# read, never what any element says.
+_TEXT_ROLES = ("AXTextArea", "AXTextField", "AXComboBox", "AXSearchField")
+_DIALOG_SUBROLES = ("AXApplicationDialog", "AXDialog", "AXSystemDialog", "AXFloatingWindow")
+_kAXErrorNoValue = -25212
+
+
+class _AX:
+    def __init__(self):
+        ax = ctypes.CDLL("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+        cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        ax.AXUIElementCreateApplication.argtypes = [c_int]
+        ax.AXUIElementCreateApplication.restype = c_void_p
+        ax.AXUIElementCopyAttributeValue.argtypes = [c_void_p, c_void_p, POINTER(c_void_p)]
+        ax.AXUIElementCopyAttributeValue.restype = c_int
+        ax.AXUIElementSetAttributeValue.argtypes = [c_void_p, c_void_p, c_void_p]
+        ax.AXUIElementSetAttributeValue.restype = c_int
+        ax.AXUIElementSetMessagingTimeout.argtypes = [c_void_p, ctypes.c_float]
+        cf.CFStringCreateWithCString.restype = c_void_p
+        cf.CFStringCreateWithCString.argtypes = [c_void_p, c_char_p, c_uint32]
+        cf.CFStringGetCString.argtypes = [c_void_p, c_char_p, ctypes.c_long, c_uint32]
+        cf.CFStringGetCString.restype = c_bool
+        cf.CFGetTypeID.argtypes = [c_void_p]
+        cf.CFGetTypeID.restype = c_ulong
+        cf.CFStringGetTypeID.restype = c_ulong
+        cf.CFArrayGetTypeID.restype = c_ulong
+        cf.CFArrayGetCount.argtypes = [c_void_p]
+        cf.CFArrayGetCount.restype = ctypes.c_long
+        cf.CFArrayGetValueAtIndex.argtypes = [c_void_p, ctypes.c_long]
+        cf.CFArrayGetValueAtIndex.restype = c_void_p
+        cf.CFEqual.argtypes = [c_void_p, c_void_p]
+        cf.CFEqual.restype = c_bool
+        cf.CFRelease.argtypes = [c_void_p]
+        self.ax, self.cf = ax, cf
+        self.true = c_void_p.in_dll(cf, "kCFBooleanTrue").value
+        self.names: dict = {}
+        self.enabled: set = set()  # pids whose web content we asked to expose
+
+    def _name(self, s: str) -> int:
+        if s not in self.names:  # kept for the life of the process
+            self.names[s] = self.cf.CFStringCreateWithCString(None, s.encode(), 0x08000100)
+        return self.names[s]
+
+    def copy(self, el, attr: str):
+        """(error, value); a value must be released."""
+        out = c_void_p()
+        err = self.ax.AXUIElementCopyAttributeValue(el, self._name(attr), byref(out))
+        return err, (out.value if err == 0 else None)
+
+    def text(self, el, attr: str) -> Optional[str]:
+        err, v = self.copy(el, attr)
+        if not v:
+            return None
+        try:
+            if self.cf.CFGetTypeID(v) != self.cf.CFStringGetTypeID():
+                return None
+            buf = ctypes.create_string_buffer(1024)
+            return buf.value.decode("utf-8", "replace") if self.cf.CFStringGetCString(v, buf, 1024, 0x08000100) else None
+        finally:
+            self.cf.CFRelease(v)
+
+    def chain(self, el) -> list:
+        """Ancestors of `el` from its window down to `el` (all retained; release them)."""
+        out = [el]
+        cur = el
+        for _ in range(80):
+            if self.text(cur, "AXRole") == "AXWindow":
+                break
+            err, p = self.copy(cur, "AXParent")
+            if not p:
+                break
+            out.append(p)
+            cur = p
+        return out[::-1]
+
+    def find_boxes(self, window) -> Tuple[List[Tuple[list, int]], list]:
+        """Message boxes under `window` as (path of elements from the window down, 1 if labelled
+        "Prompt"), and the arrays the path elements live in, which the caller releases."""
+        found: List[Tuple[list, int]] = []
+        arrays: list = []
+        budget = [6000]
+
+        def walk(el, path):
+            budget[0] -= 1
+            if budget[0] < 0 or len(path) > 90:
+                return
+            if self.text(el, "AXRole") == "AXTextArea":
+                found.append((path, 1 if self.text(el, "AXDescription") == "Prompt" else 0))
+                return
+            err, kids = self.copy(el, "AXChildren")
+            if not kids:
+                return
+            arrays.append(kids)
+            if self.cf.CFGetTypeID(kids) != self.cf.CFArrayGetTypeID():
+                return
+            for i in range(self.cf.CFArrayGetCount(kids)):
+                k = self.cf.CFArrayGetValueAtIndex(kids, i)
+                walk(k, path + [k])
+
+        walk(window, [window])
+        return found, arrays
+
+
+_ax: Optional[_AX] = None
+
+
+def _app_pid(bundle_id: str) -> Optional[int]:
+    try:
+        out = subprocess.run(["lsappinfo", "info", "-only", "pid", "-app", bundle_id],
+                             capture_output=True, text=True, timeout=1).stdout
+        return int(out.split("=", 1)[1]) if "=" in out else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def focus_message_box(bundle_id: str) -> str:
+    """Give the app's message box keyboard focus, unless a text field, a menu or a dialog has
+    it. Returns what happened, for the log: "kept ...", "focused", or why it could not."""
+    global _ax
+    if not IS_MAC:
+        return "not macOS"
+    if _ax is None:
+        try:
+            _ax = _AX()
+        except (OSError, AttributeError) as e:
+            return f"no Accessibility API ({e})"
+    a, cf = _ax, _ax.cf
+    pid = _app_pid(bundle_id)
+    if pid is None:
+        return "app not running"
+    app = a.ax.AXUIElementCreateApplication(pid)
+    held: list = []
+    try:
+        a.ax.AXUIElementSetMessagingTimeout(app, 0.5)
+        if pid not in a.enabled:
+            # Electron builds the tree of its web content only for assistive apps that ask.
+            a.ax.AXUIElementSetAttributeValue(app, a._name("AXManualAccessibility"), a.true)
+            a.enabled.add(pid)
+        focused = None
+        for _ in range(20):  # the first time, the tree takes a moment to appear
+            err, focused = a.copy(app, "AXFocusedUIElement")
+            if focused or err != _kAXErrorNoValue:
+                break
+            time.sleep(0.05)
+        if not focused:
+            return "no focused element"
+        held.append(focused)
+        role = a.text(focused, "AXRole")
+        if role in _TEXT_ROLES:
+            return f"kept ({role})"
+        chain = a.chain(focused)
+        held += chain[:-1]
+        for el in chain:
+            r, sub = a.text(el, "AXRole"), a.text(el, "AXSubrole")
+            if r in ("AXMenu", "AXMenuItem", "AXSheet") or sub in _DIALOG_SUBROLES:
+                return f"kept ({r}/{sub})"
+        window = chain[0]
+        if a.text(window, "AXRole") != "AXWindow":
+            err, window = a.copy(app, "AXFocusedWindow")
+            if not window:
+                return "no window"
+            held.append(window)
+        boxes, arrays = a.find_boxes(window)
+        held += arrays
+        if not boxes:
+            return "no message box found"
+
+        def shared(path):  # how far down the tree it shares with the focused element
+            n = 0
+            for x, y in zip(path, chain):
+                if not cf.CFEqual(x, y):
+                    break
+                n += 1
+            return n
+        # The labelled box first, then the one nearest to where focus was (split view).
+        path, _ = max(boxes, key=lambda b: (b[1], shared(b[0])))
+        box = path[-1]
+        err = a.ax.AXUIElementSetAttributeValue(box, a._name("AXFocused"), a.true)
+        if err:
+            return f"could not focus the message box (AX error {err})"
+        for _ in range(10):
+            err, now = a.copy(app, "AXFocusedUIElement")
+            if now:
+                same = cf.CFEqual(now, box)
+                cf.CFRelease(now)
+                if same:
+                    return f"focused (was {role})"
+            time.sleep(0.02)
+        return f"asked to focus the message box (was {role}), not confirmed"
+    finally:
+        for v in held:
+            cf.CFRelease(v)
+        cf.CFRelease(app)
+
+
 # ---------------------------------------------------------------- spawning
 POSIX_SPAWN_SETSID = 0x0400
 POSIX_SPAWN_CLOEXEC_DEFAULT = 0x4000
