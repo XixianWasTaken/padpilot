@@ -162,6 +162,10 @@ DEFAULTS = {
     # `padpilot press` and `padpilot send` never answer a permission request; only the real
     # controller does. true lifts that, for test scripts that drive an agent through the daemon.
     "scripted_input_answers_permission": False,
+    # A session nobody attends (`claude -p`, a script that calls the agent) does not drive the
+    # controller: no lights, rumble or sounds for it, and its permission requests are not held.
+    # true lets such sessions in.
+    "background_sessions": False,
     # Let other apps read the controller too (browsers' Gamepad API). Practice mode does this anyway.
     # Off by default: shared, macOS also sees the PS button and opens its Games app.
     "share_controller": False,

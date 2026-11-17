@@ -116,6 +116,10 @@ class Session:
         self.questions_at = 0.0
         self.reminded = False
         self.transcript: Optional[str] = None
+        # Where it runs, as its hooks say: the entry point ("claude-desktop", "cli", ...; "" if
+        # they do not say) and whether someone attends it (None if they do not say).
+        self.entry = ""
+        self.attended: Optional[bool] = None
         self.context: Optional[float] = None  # share of the context window the last request used
 
     def replies(self) -> int:
@@ -319,10 +323,17 @@ class Daemon:
             except Exception:
                 log.exception("desktop keys failed")
 
+    def _desktop_sessions(self) -> List[Session]:
+        """The sessions a key press in the desktop app can belong to. Not one in a `padpilot run`
+        terminal, not one that says it runs elsewhere (a terminal, an editor), and not one nobody
+        attends. A session that does not say where it runs (an older Claude Code) counts."""
+        wrapped = {t.id for t in self.targets}
+        return [s for s in self.sessions.values()
+                if s.key not in wrapped and s.attended is not False and s.entry in ("", "claude-desktop")]
+
     def _desktop_session(self) -> Optional[str]:
-        """The hook session a desktop key press most likely belongs to: the latest one."""
-        ids = {t.id for t in self.targets}
-        cands = [s for s in self.sessions.values() if s.key not in ids]
+        """The session a desktop key press most likely belongs to: the latest of those."""
+        cands = self._desktop_sessions()
         return max(cands, key=lambda s: s.updated).key if cands else None
 
     def _has_hold(self, name: str) -> bool:
@@ -470,6 +481,10 @@ class Daemon:
                 return
             s = self._session(key, source, label)
             s.last_event = ev
+            if isinstance(msg.get("entry"), str) and msg["entry"]:
+                s.entry = msg["entry"]
+            if isinstance(msg.get("attended"), bool):
+                s.attended = msg["attended"]
             if isinstance(data.get("transcript_path"), str):
                 s.transcript = data["transcript_path"]
             if ev == "SessionStart":
@@ -641,8 +656,7 @@ class Daemon:
         if target is not None:
             s = self.sessions.get(target.id)
             return bool(s and s.state == "permission")
-        wrapped = {t.id for t in self.targets}
-        return any(s.state == "permission" and s.key not in wrapped for s in self.sessions.values())
+        return any(s.state == "permission" for s in self._desktop_sessions())
 
     def handle_control(self, name: str, injected: bool = False) -> None:
         """A control the tracker reported, or with `injected` one that came over the socket
@@ -742,8 +756,7 @@ class Daemon:
             return True
         if desktop:
             # The latest session may not be the one asking; any desktop session asking will do.
-            wrapped = {t.id for t in self.targets}
-            asking = [x for x in self.sessions.values() if x.state == "permission" and x.key not in wrapped]
+            asking = [x for x in self._desktop_sessions() if x.state == "permission"]
             if asking:
                 sess = max(asking, key=lambda x: x.updated)
         # "act:<action>" steps become the keys this destination really uses.
@@ -829,15 +842,13 @@ class Daemon:
 
     def _question_session(self) -> Optional[Session]:
         """The desktop session with an open question box, if any."""
-        ids = {t.id for t in self.targets}
-        cands = [s for s in self.sessions.values() if s.key not in ids and s.questions]
+        cands = [s for s in self._desktop_sessions() if s.questions]
         return max(cands, key=lambda s: s.questions_at) if cands else None
 
     def _reply_session(self, target: Optional[Target]) -> Optional[Session]:
         if target is not None:
             return self.sessions.get(target.id)
-        ids = {t.id for t in self.targets}
-        cands = [s for s in self.sessions.values() if s.key not in ids and s.replies()]
+        cands = [s for s in self._desktop_sessions() if s.replies()]
         return max(cands, key=lambda s: s.choices_at) if cands else None
 
     def _update_context(self, s: Session) -> None:
@@ -1299,6 +1310,7 @@ class Daemon:
                               "tool": s.tool, "tools_this_turn": s.tools,
                               "choices": [label for label, app in s.choices if label and not app],
                               "can_retry": bool(s.last_prompt) and s.state not in BUSY,
+                              "entry": s.entry, "attended": s.attended,
                               "context": None if s.context is None else round(s.context, 3)}
                              for s in self.sessions.values()],
                 "pending_approvals": len(self.approvals),

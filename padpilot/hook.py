@@ -65,6 +65,13 @@ def _dispatch(source: str, p: dict) -> None:
         "wrapper": os.environ.get("PADPILOT_WRAPPER_ID") or None,
         "data": {k: p[k] for k in KEEP_FIELDS if k in p},
     }
+    # Where the session runs, as Claude Code tells its hooks: the entry point (the desktop app,
+    # a terminal, an editor) and whether someone attends it. `claude -p` is not attended, also
+    # when it is started inside a desktop session and so inherits that entry point.
+    msg["entry"] = os.environ.get("CLAUDE_CODE_ENTRYPOINT") or ""
+    msg["attended"] = {"1": True, "0": False}.get(os.environ.get("CLAUDE_CODE_SESSION_ATTENDED") or "")
+    if msg["attended"] is False and not C.load_config().get("background_sessions"):
+        return  # nobody is watching it: the controller stays out of it
     # The last prompt, for the retry button (kept in the daemon's memory only).
     if event == "UserPromptSubmit" and isinstance(p.get("prompt"), str):
         msg["data"]["prompt"] = p["prompt"][:MAX_PROMPT]

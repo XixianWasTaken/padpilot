@@ -939,6 +939,43 @@ class DesktopKeysTest(unittest.TestCase):
         time.sleep(0.2)
         self.assertEqual(len(self.posted), 2)
 
+    def test_desktop_keys_belong_to_sessions_in_the_desktop_app(self):
+        calls = []
+        fake = (lambda: self.front, lambda prompt=False: True, lambda items, gap: self.posted.append(items))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(),
+                   desktop_question=lambda app, qs, pick: calls.append(pick) or "submitted")
+
+        def ev(event, session, entry, attended=True, **data):
+            d.handle_event({"op": "event", "source": "claude", "event": event, "session": session,
+                            "entry": entry, "attended": attended, "data": data})
+
+        def wait(n):
+            for _ in range(100):
+                if len(self.posted) >= n:
+                    break
+                time.sleep(0.01)
+            time.sleep(0.05)
+        ev("UserPromptSubmit", "desk", "claude-desktop", prompt="typed in the app")
+        ev("Stop", "desk", "claude-desktop")
+        # Later, so these are the latest sessions: one in a terminal (not under `padpilot run`),
+        # with a question open there, and a background run that was let in.
+        ev("UserPromptSubmit", "term", "cli", prompt="typed in a terminal")
+        ev("PreToolUse", "term", "cli", tool_name="AskUserQuestion",
+           tool_input={"questions": [{"multiSelect": False, "options": ["A", "B"]}]})
+        ev("PermissionRequest", "term", "cli", tool_name="Bash")
+        ev("UserPromptSubmit", "bg", "claude-desktop", attended=False, prompt="a background run")
+        d.sessions["claude:term"].since -= 1
+        d.handle_control("cross")  # not the app's question box, not the app's permission prompt: Enter
+        wait(1)
+        self.assertEqual((calls, self.posted), ([], [[{"key": "enter"}]]))
+        self.assertEqual(d.sessions["claude:term"].state, "permission")  # and not taken for answered
+        d.handle_control("r3")  # retry: what was typed in the app
+        wait(2)
+        self.assertEqual(self.posted[1][-1], {"text": "typed in the app"})
+        where = {s["key"]: (s["entry"], s["attended"]) for s in d.status()["sessions"]}
+        self.assertEqual(where, {"claude:desk": ("claude-desktop", True), "claude:term": ("cli", True),
+                                 "claude:bg": ("claude-desktop", False)})
+
     def test_actions_the_app_lacks_send_nothing(self):
         self.d.handle_control("l1")
         self.d.handle_control("swipe_left")
@@ -1691,11 +1728,46 @@ class HookTest(unittest.TestCase):
         orig = (hook.client.request, hook.client.start_daemon)
         hook.client.request = lambda msg, timeout=0: sent.append(msg)
         hook.client.start_daemon = lambda: None
+        env = {k: os.environ.pop(k, None) for k in self.WHERE}  # wherever these tests are run from
         try:
             hook._dispatch("claude", payload)
         finally:
             hook.client.request, hook.client.start_daemon = orig
+            os.environ.update({k: v for k, v in env.items() if v is not None})
         return sent[0]
+
+    WHERE = ("CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ATTENDED")
+
+    def test_a_background_run_does_not_reach_the_daemon(self):
+        from padpilot import hook
+        sent = []
+        orig = (hook.client.request, hook.client.start_daemon, hook.C.load_config)
+        hook.client.request = lambda msg, timeout=0: sent.append(msg)
+        hook.client.start_daemon = lambda: sent.append("start")
+        env = {k: os.environ.get(k) for k in self.WHERE}
+        try:
+            # `claude -p` started inside a desktop session: it inherits that entry point.
+            os.environ.update(CLAUDE_CODE_ENTRYPOINT="claude-desktop", CLAUDE_CODE_SESSION_ATTENDED="0")
+            hook._dispatch("claude", {"hook_event_name": "SessionStart", "session_id": "s"})
+            hook._dispatch("claude", {"hook_event_name": "PermissionRequest", "session_id": "s", "tool_name": "Bash"})
+            self.assertEqual(sent, [])  # the daemon is not even started for it
+            hook.C.load_config = lambda: dict(C.DEFAULTS, background_sessions=True, hook_approval_timeout_s=0)
+            hook._dispatch("claude", {"hook_event_name": "Stop", "session_id": "s"})
+            self.assertEqual((sent[-1]["entry"], sent[-1]["attended"]), ("claude-desktop", False))
+            hook.C.load_config = orig[2]
+            os.environ["CLAUDE_CODE_SESSION_ATTENDED"] = "1"  # a session in the desktop app
+            hook._dispatch("claude", {"hook_event_name": "Stop", "session_id": "s"})
+            self.assertEqual((sent[-1]["entry"], sent[-1]["attended"]), ("claude-desktop", True))
+            for k in self.WHERE:  # an agent that does not say
+                os.environ.pop(k, None)
+            hook._dispatch("codex", {"hook_event_name": "Stop", "session_id": "s"})
+            self.assertEqual((sent[-1]["entry"], sent[-1]["attended"]), ("", None))
+        finally:
+            hook.client.request, hook.client.start_daemon, hook.C.load_config = orig
+            for k, v in env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
 
     def test_forwards_prompt_and_card_buttons_only(self):
         m = self.run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "s", "prompt": "x" * 30000})
