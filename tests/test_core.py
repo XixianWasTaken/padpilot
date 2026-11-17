@@ -658,6 +658,32 @@ class DesktopKeysTest(unittest.TestCase):
         self.assertEqual(self.posted, [[{"key": "enter"}]])
         self.assertEqual(len(calls), 2)
 
+    def test_a_press_queued_behind_a_submit_is_dropped(self):
+        calls = []
+
+        def answer(app, qs, pick):  # like the real one: a submit takes a moment
+            calls.append(pick)
+            time.sleep(0.15)
+            return "option 1 ticked (press)" if pick == 9 else "submitted"
+        fake = (lambda: self.front, lambda prompt=False: True, lambda items, gap: self.posted.append(items))
+        d = Daemon(C.load_config(), None, desktop=fake, resolver=make_resolver(), desktop_question=answer)
+        qs = [{"multiSelect": False, "options": ["A", "B"]}, {"multiSelect": False, "options": ["C", "D"]}]
+        d.handle_event({"op": "event", "source": "claude", "event": "PreToolUse", "session": "s1",
+                        "data": {"tool_name": "AskUserQuestion", "tool_input": {"questions": qs}}})
+        d.handle_control("cross")  # page 1
+        d.handle_control("cross")  # an impatient second press: it must not submit page 2
+        time.sleep(0.5)
+        self.assertEqual(calls, [None])
+        d.handle_control("cross")  # page 2 is on screen now: this one is for it
+        time.sleep(0.3)
+        self.assertEqual(calls, [None, None])
+        # Ticking several options of a multiple-choice question in a row is not a submit.
+        d.cfg["mapping"]["r1+cross"] = "@choose:9"
+        d.handle_control("r1+cross")
+        d.handle_control("r1+cross")
+        time.sleep(0.5)
+        self.assertEqual(calls, [None, None, 9, 9])
+
     def test_actions_the_app_lacks_send_nothing(self):
         self.d.handle_control("l1")
         self.d.handle_control("swipe_left")

@@ -202,6 +202,7 @@ class Daemon:
         self.preview: Optional[tuple] = None    # (light spec, since): the tutorial page shows a state
         self.ptt_sent: Dict[str, bool] = {}  # push-to-talk control -> its press was delivered
         self.started = time.monotonic()
+        self.question_submitted_at = 0.0  # when a question-box page was last submitted
 
     # ------------------------------------------------------------ helpers
     def _mapping_for(self, target: Optional[Target]) -> dict:
@@ -244,9 +245,18 @@ class Daemon:
             # to another app meanwhile, instead of typing into it.
             try:
                 if items and "question" in items[0]:
-                    if self.desktop_question is not None:
-                        q = items[0]
-                        log.info("question box: %s", self.desktop_question(app, q["questions"], q["question"]))
+                    q = items[0]
+                    if self.desktop_question is None:
+                        continue
+                    if q.get("at", 0.0) < self.question_submitted_at:
+                        # Pressed while the page before was still being submitted (that takes
+                        # about a second): it was aimed at that page, not the one on screen now.
+                        log.info("question box: press dropped, made before the last page was submitted")
+                        continue
+                    res = self.desktop_question(app, q["questions"], q["question"])
+                    log.info("question box: %s", res)
+                    if res.endswith("submitted"):
+                        self.question_submitted_at = time.monotonic()
                     continue
                 if self.desktop_focus is not None and needs_message_box(items):
                     note = self.desktop_focus(app)
@@ -638,8 +648,9 @@ class Daemon:
             if self.practice is not None:
                 self._notify({"op": "would_send", "name": name, "dest": dest, "items": [item]})
                 return True
-            if not self._desktop_send([item]):
+            if not self._desktop_send([dict(item, at=time.monotonic())]):
                 return self._deny(name, "Claude app is not in front (or no Accessibility permission)")
+            self._play("tick")  # it takes a moment to show on screen: say the press was taken
             return True
         if desktop:
             # The latest session may not be the one asking; any desktop session asking will do.
