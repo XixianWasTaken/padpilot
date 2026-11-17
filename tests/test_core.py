@@ -410,6 +410,20 @@ class DaemonLogicTest(unittest.TestCase):
         self.d.frame(s.updated + 31 * 60)
         self.assertNotIn("claude:s1", self.d.sessions)
 
+    def test_a_finished_session_and_its_card_wait_for_you(self):
+        self.ev("UserPromptSubmit", prompt="do it")
+        self.ev("PreToolUse", tool_name="mcp__ccd_turn__wrap_up", tool_input={"actions": [{"label": "Yes"}]})
+        self.ev("Stop")
+        s = self.d.sessions["claude:s1"]
+        self.d.frame(s.updated + 31 * 60)  # back from lunch: still green
+        self.assertEqual(self.d.sessions["claude:s1"].state, "done")
+        self.d.handle_control("l3")  # any button: acknowledged
+        self.assertEqual(s.state, "idle")
+        self.d.frame(s.updated + 31 * 60)  # the card can still be answered
+        self.assertEqual(self.d.sessions["claude:s1"].replies(), 1)
+        self.d.frame(s.updated + 13 * 3600)  # but not for ever
+        self.assertNotIn("claude:s1", self.d.sessions)
+
     def test_controls_go_to_focused_wrapper(self):
         a, b = FakeConn(), FakeConn()
         self.d.attach(Target("w-a", "claude", "a", a))

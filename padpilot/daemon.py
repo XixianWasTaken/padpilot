@@ -40,6 +40,7 @@ log = logging.getLogger("padpilot")
 FRAME_S = 1 / 30.0
 IDLE_FRAME_S = 1 / 15.0
 STALE_SESSION_S = 30 * 60   # hook-only session without events
+STALE_KEPT_S = 12 * 3600    # ... when its turn is finished and it waits for you (green light, card)
 STUCK_BUSY_S = 10 * 60      # 'thinking' with no event at all for this long -> idle
 BUSY = ("thinking", "tool", "compacting", "permission")
 # PS combos that change a saved setting; practice mode only shows them.
@@ -932,9 +933,12 @@ class Daemon:
 
     def frame(self, now: float) -> OutputState:
         with self.lock:
-            # Hook-only sessions can miss SessionEnd (crash, Ctrl+C); expire them.
+            # Hook-only sessions can miss SessionEnd (crash, Ctrl+C); expire them. A finished one
+            # waits for you ("done" stays until a button press, its card until it is used), so
+            # it is kept much longer.
             for k in [k for k, s in self.sessions.items()
-                      if not any(t.id == k for t in self.targets) and now - s.updated > STALE_SESSION_S]:
+                      if not any(t.id == k for t in self.targets) and now - s.updated > (
+                          STALE_KEPT_S if s.state == "done" or s.replies() else STALE_SESSION_S)]:
                 del self.sessions[k]
             # Decay and repeat-rumble bookkeeping.
             for s in self.sessions.values():
