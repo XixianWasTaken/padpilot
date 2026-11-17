@@ -1,6 +1,6 @@
 ---
 description: Play a lightbar and rumble demo on the DualSense
-allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot":*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot" demo:*)
 ---
 !`"${CLAUDE_PLUGIN_ROOT}/bin/padpilot" demo 3`
 

@@ -1,6 +1,6 @@
 ---
 description: Open the DualSense tutorial page (practice mode while it is open)
-allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot":*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot" tutorial:*)
 ---
 !`"${CLAUDE_PLUGIN_ROOT}/bin/padpilot" tutorial`
 

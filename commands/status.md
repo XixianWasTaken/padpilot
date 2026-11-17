@@ -1,6 +1,6 @@
 ---
 description: Show DualSense controller and session status
-allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot":*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot" status:*)
 ---
 Controller status:
 

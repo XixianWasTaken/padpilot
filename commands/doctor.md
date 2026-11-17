@@ -1,6 +1,6 @@
 ---
 description: Diagnose the DualSense plugin installation
-allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot":*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot" doctor:*)
 ---
 !`"${CLAUDE_PLUGIN_ROOT}/bin/padpilot" doctor 2>&1`
 

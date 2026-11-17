@@ -1,6 +1,6 @@
 ---
 description: Let the DualSense buttons drive the Claude desktop app (macOS permission + status)
-allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot":*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/bin/padpilot" desktop:*)
 ---
 Desktop-app control check:
 
