@@ -413,9 +413,25 @@ def focus_message_box(bundle_id: str) -> str:
 
 # ---------------------------------------------------------------- question box
 # The Claude app's multiple-choice question box (AskUserQuestion): an AXApplicationGroup whose
-# options are toggle buttons, then "Other", then Skip and Submit (or Next). Pressing an option
-# through Accessibility only focuses it, so it is focused and given a real Space key press;
-# Submit takes an AXPress. Tested in Claude desktop, November 2026.
+# options are toggle buttons, then "Other", then Skip and Submit (or Next). The app wraps the
+# options and the Skip/Submit row in a click gate: when keyboard focus arrives in one of them
+# from outside the card, clicks there are refused for the next 400 ms. An AXPress first moves
+# focus to its target and then clicks, so from outside the card the click is always refused
+# (only focus moves). Hence: put focus there first, wait out the gate, then activate once.
+# Tested in Claude desktop, November 2026.
+_GATE_WAIT = 0.6  # the app's 400 ms after focus arrives, plus a margin
+
+
+def _focus_in(a, app, el, held: list) -> bool:
+    """Is keyboard focus on `el` or somewhere inside it?"""
+    err, f = a.copy(app, "AXFocusedUIElement")
+    if not f:
+        return False
+    chain = a.chain(f)
+    held.extend(chain)
+    return any(a.cf.CFEqual(x, el) for x in chain)
+
+
 def _question_card(a, window, labels: List[str], arrays: list):
     """(card, its toggle buttons) of the box whose options start with these labels."""
     found: list = []
@@ -505,9 +521,10 @@ def answer_question(bundle_id: str, questions: List[dict], pick: Optional[int]) 
             before = a.num(el, "AXValue")
             how = "press"
             if multi or before != 1:
-                # AXPress clicks the option only when focus is already in the box; otherwise it
-                # just moves focus there, and a real Space press (the button takes it as a
-                # click) does the job. So press, look, and use Space only if nothing changed.
+                # AXPress clicks the option only when focus is already in the card; otherwise
+                # it just moves focus there (the click gate above). By the time the Space below
+                # is pressed the gate has passed, and the button takes it as a click. So press,
+                # look, and use Space only if nothing changed.
                 a.ax.AXUIElementPerformAction(el, a._name("AXPress"))
                 time.sleep(0.3)
             if (multi or before != 1) and a.num(el, "AXValue") == before:
@@ -532,8 +549,50 @@ def answer_question(bundle_id: str, questions: List[dict], pick: Optional[int]) 
         submit = buttons[-1]  # Skip first, then Submit / Next (titles are translated)
         if a.num(submit, "AXEnabled") == 0:
             return "Submit is not enabled yet"
-        if a.ax.AXUIElementPerformAction(submit, a._name("AXPress")):
-            return "could not press Submit"
+        # One AXPress, and only one: it is never repeated, so it cannot submit twice or press
+        # the next page's button. With focus outside the card the app would refuse it (see the
+        # note above), so focus Submit first and let the 400 ms gate pass.
+        title = a.text(submit, "AXTitle")
+        asked = a.text(card, "AXDescription")
+
+        def on_submit() -> bool:
+            err, f = a.copy(app, "AXFocusedUIElement")
+            if not f:
+                return False
+            held.append(f)
+            return bool(cf.CFEqual(f, submit)) or (
+                a.text(f, "AXRole") == "AXButton" and a.text(f, "AXTitle") == title)
+
+        if not _focus_in(a, app, card, held):
+            if frontmost_bundle_id() != bundle_id:
+                return "the app is not in front"
+            if a.ax.AXUIElementSetAttributeValue(submit, a._name("AXFocused"), a.true):
+                return "could not focus Submit"
+            t0 = time.monotonic()
+            for _ in range(10):
+                if on_submit():
+                    break
+                time.sleep(0.05)
+            else:
+                return "Submit did not take focus"
+            time.sleep(max(0.0, _GATE_WAIT - (time.monotonic() - t0)))
+            if not on_submit():  # focus moved meanwhile: a press now would be refused again
+                return "Submit lost focus before it could be pressed"
+            if a.num(submit, "AXEnabled") == 0:
+                return "Submit is not enabled yet"
+        a.ax.AXUIElementPerformAction(submit, a._name("AXPress"))
+        labels = list(q.get("options") or [])
+        for _ in range(15):  # this question leaves the screen (Submit) or the page (Next)
+            time.sleep(0.1)
+            err, w = a.copy(app, "AXFocusedWindow")
+            if not w:
+                break
+            held.append(w)
+            c = _question_card(a, w, labels, held)[0]
+            if c is None or a.text(c, "AXDescription") != asked:
+                break
+        else:
+            return "Submit did not take: the question is still on screen"
         return f"picked option {pick} ({how}) and submitted" if pick else "submitted"
     finally:
         for v in held:
