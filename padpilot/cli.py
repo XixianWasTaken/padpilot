@@ -17,6 +17,7 @@ USAGE = """padpilot - drive Claude Code / Codex with a DualSense controller
   padpilot run <cmd> [args]   run an agent (claude, codex, ...) with controller input
   padpilot status             controller + session status (JSON)
   padpilot tutorial           open the tutorial page (practice mode while it is open)
+  padpilot manual             open the manual (Chinese / English)
   padpilot watch              print controller inputs as they happen
   padpilot demo               light + rumble demo
   padpilot rumble <pattern>   play a rumble pattern (tick, success, attention, error, ...)
@@ -35,6 +36,8 @@ USAGE = """padpilot - drive Claude Code / Codex with a DualSense controller
 
 CODEX_EVENTS = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
                 "PostToolUse", "PreCompact", "PostCompact", "SubagentStop", "Stop", "Interrupt"]
+# The one package padpilot installs (from PyPI, into ~/.padpilot/venv), pinned to an exact version.
+HIDAPI = "hidapi==0.15.0"
 MARK = "padpilot hook codex"
 OLD_MARK = "dsagent hook codex"  # hooks installed before 0.4, when the command was called dsagent
 
@@ -97,6 +100,8 @@ def main(argv=None) -> int:
         return keys_table()
     if cmd == "tutorial":
         return tutorial(open_browser="--no-open" not in rest)
+    if cmd == "manual":
+        return tutorial(open_browser="--no-open" not in rest, page="manual")
     if cmd == "watch":  # --practice: nothing is sent to apps
         return _watch(practice="--practice" in rest)
     if cmd == "setup":
@@ -185,8 +190,9 @@ def _watch(practice: bool = False) -> int:
         return 0
 
 
-def tutorial(open_browser: bool = True) -> int:
-    """Open the tutorial page the daemon serves. While it is open the daemon is in practice mode."""
+def tutorial(open_browser: bool = True, page: str = "") -> int:
+    """Open a page the daemon serves: the tutorial (practice mode while it is open) or, with
+    page="manual", the manual (no practice mode)."""
     import urllib.request
     port = int(C.load_config().get("tutorial_port") or 0)
     if not port:
@@ -195,7 +201,7 @@ def tutorial(open_browser: bool = True) -> int:
     if not client.start_daemon(wait=4.0):
         print(f"daemon failed to start, see {C.LOG_PATH}")
         return 1
-    url = f"http://127.0.0.1:{port}/"
+    url = f"http://127.0.0.1:{port}/{page}"
     deadline = time.monotonic() + 3
     while True:
         try:
@@ -239,7 +245,7 @@ def setup(quiet: bool = False, then_daemon: bool = False) -> int:
         venv.EnvBuilder(with_pip=True, clear=False).create(str(C.VENV_PATH))
         py = str(C.VENV_PATH / "bin" / "python3")
         say("installing hidapi ...")
-        r = subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check", "-q", "hidapi"],
+        r = subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check", "-q", HIDAPI],
                            capture_output=quiet)
         if r.returncode != 0 or not _venv_has_hid():
             print("padpilot setup: installing hidapi failed", file=sys.stderr)

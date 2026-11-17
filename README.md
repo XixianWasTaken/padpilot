@@ -35,7 +35,7 @@ padpilot doctor             # checks hidapi, the controller and the daemon
 padpilot demo               # rainbow light + rumble
 ```
 
-Then learn the buttons: type `/padpilot:tutorial` in Claude Code, or run `padpilot tutorial`.
+Then learn the buttons: type `/padpilot:tutorial` in Claude Code, or run `padpilot tutorial`. For the whole reference in one place, run `padpilot manual`.
 
 ## Use it
 
@@ -108,6 +108,7 @@ Put only what you want to change in `~/.padpilot/config.json`; it is merged over
 
 ```bash
 padpilot tutorial          # open the tutorial page (practice mode while it is open)
+padpilot manual            # open the manual, in Chinese or English
 padpilot status            # controller, battery and sessions as JSON
 padpilot keys              # the button layout for your settings
 padpilot watch --practice  # print every press without sending anything
@@ -116,6 +117,31 @@ padpilot doctor
 ```
 
 Slash commands in Claude Code: `/padpilot:tutorial`, `/padpilot:status`, `/padpilot:demo`, `/padpilot:doctor`, `/padpilot:desktop`.
+
+## What padpilot runs, reads and sends
+
+Everything runs on your own computer. padpilot has no server and no telemetry, and nothing about your sessions leaves the machine. The full list:
+
+- **Hooks.** Claude Code runs `bin/padpilot hook claude` on these events: SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PermissionRequest, PermissionDenied, PostToolUse, PostToolUseFailure, Notification, Stop, StopFailure, SubagentStop, PreCompact, PostCompact and Elicitation. Each run sends one small message to the padpilot daemon over a local Unix socket (`~/.padpilot/daemon.sock`). The message holds the event name, session id, working folder and tool name. On UserPromptSubmit it also holds your prompt, kept in the daemon's memory for the R3 retry button and never written to disk. When Claude shows a next-step card, it holds the labels of the card's buttons.
+- **Permission requests.** Without `padpilot run`, the PermissionRequest hook waits up to 45 seconds (`hook_approval_timeout_s`). It answers allow when you press ✕ and deny when you press ○; otherwise Claude Code shows its normal dialog.
+- **The daemon.** The first hook starts a background process that opens the DualSense over USB or Bluetooth (HID). It exits after 4 hours without activity (`idle_shutdown_minutes`), or with `padpilot stop`.
+- **One download.** The first time the daemon is needed, padpilot creates `~/.padpilot/venv` and installs `hidapi==0.15.0` from PyPI with pip. That is the only thing padpilot downloads.
+- **Files it reads.**
+  - Claude Code session transcripts in `~/.claude/projects/`. It reads only the end of a session's file: your last message (so R3 still works after a restart), the last next-step card, and how many tokens the last request used. This stays in memory; nothing is copied or sent anywhere.
+  - `~/.claude/keybindings.json`, and the dictation shortcut in the Claude app's `claude_desktop_config.json`, so the buttons send the keys you use.
+  - `~/.padpilot/config.json`, your settings.
+- **Files it writes**, all in `~/.padpilot/`:
+  - `config.json`, only when you change a setting with a PS combo;
+  - `daemon.log`, with button names, session states and the keys sent (typed text is logged by its length only, never its content);
+  - `daemon.stderr`, the socket and the pid file;
+  - `sounds/`, macOS system sounds converted for the controller with `afconvert`;
+  - the `venv/`.
+
+  `padpilot install-codex` writes `~/.codex/hooks.json`, after backing it up, only when you run it.
+- **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending or clearing, it uses the Accessibility API to move keyboard focus to the message box if a button or the sidebar has it (a text field, menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. `padpilot run` types into its own terminal session instead.
+- **Microphone.** It asks CoreAudio whether any app is recording, to light the controller's mic LED. It never opens the microphone and never records audio.
+- **Sound.** Cues are macOS system sounds played on the controller's own speaker (USB only).
+- **Tutorial and manual pages.** Served on `http://127.0.0.1:8737/` and `/manual`, answering only pages from that address. They load their fonts from Google Fonts (`fonts.googleapis.com`), the only internet request padpilot's pages make.
 
 ## Troubleshooting
 

@@ -250,6 +250,7 @@ padpilot desktop           # macOS：桌面 app 控制的权限和状态
 padpilot keys              # 按键布局，以及按你当前的快捷键设置，每个键在各个程序里实际发什么
 padpilot press cross       # 模拟按键，方便调试和写脚本
 padpilot tutorial          # 打开新手教程网页；网页开着就是练习模式
+padpilot manual            # 打开中英双语的说明书
 padpilot watch --practice  # 终端版练习模式：灯和震动照常，但不往任何 app 发键；实时显示每个键按了多久、识别成什么（守护进程重启后自动重连）
 padpilot rumble success    # 播放一段震动
 padpilot uninstall-codex
@@ -262,11 +263,36 @@ padpilot uninstall-codex
 在 Claude Code 里输入 `/padpilot:tutorial`（或在终端运行 `padpilot tutorial`），会在浏览器里打开中英双语的新手教程：一步一个键，用真手柄、点图或用键盘都能练。
 
 - 页面由守护进程在 `http://127.0.0.1:8737/` 提供（端口可在配置里用 `"tutorial_port"` 改，设成 0 就关掉）。只有这个页面自己能用它：Host 必须是本机，Origin 必须是这个地址。
-- **页面开着就是练习模式**：灯和震动照常，按键只在页面里生效，不会发给 Claude；关掉页面就退出练习，不用开终端。守护进程重启后，页面会自己重连。
+- **页面开着就是练习模式**：灯和震动照常，按键只在页面里生效，不会发给 Claude。点页面底下的「退出练习模式」或关掉页面就退出练习，不用开终端；退出后点「重新进入练习」可以接着练。守护进程重启后，页面会自己重连。
 - 页面通过守护进程读按键，所以手柄一直**独占**（macOS 上 hidapi 的默认方式）：macOS 看不到 PS 键，不会打开 Apple「游戏」App。不独占时按 PS 会打开它（2026-11-16 实测）。麦克风键也能读到，浏览器自带的手柄接口读不到这个键。
 - 教程里的光条颜色会同步到真手柄的光条上。
 - 教程源文件是 [padpilot/tutorial.html](padpilot/tutorial.html)，也发布成了 claude.ai 上的页面；那个版本读不到手柄，只能点图或用键盘。
 - 想让别的程序（比如浏览器的手柄接口）也能读手柄，在配置里设 `"share_controller": true`。代价是按 PS 会打开「游戏」App。
+
+## padpilot 会运行、读取和发送什么
+
+所有东西都在你自己的电脑上运行。padpilot 没有服务器，不收集使用数据，会话里的任何内容都不会离开这台电脑。完整列表：
+
+- **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字。
+- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。
+- **守护进程**：第一个 hook 会启动一个后台进程，通过 USB 或蓝牙（HID）打开手柄。4 小时没有活动会自动退出（`idle_shutdown_minutes`），也可以用 `padpilot stop` 停掉。
+- **唯一一次下载**：第一次需要守护进程时，padpilot 会创建 `~/.padpilot/venv`，并用 pip 从 PyPI 安装 `hidapi==0.15.0`。这是 padpilot 唯一会下载的东西。
+- **读取的文件**：
+  - `~/.claude/projects/` 里的 Claude Code 会话记录。只读会话文件的末尾：你最后一条消息（重启后 R3 也能用）、最后一张下一步卡片、最后一次请求用了多少 token。这些只放在内存里，不复制，也不发到任何地方。
+  - `~/.claude/keybindings.json`，以及 Claude 桌面 app 的 `claude_desktop_config.json` 里的听写快捷键，这样按键发的是你实际用的快捷键。
+  - `~/.padpilot/config.json`，你的设置。
+- **写入的文件**，都在 `~/.padpilot/` 里：
+  - `config.json`，只在你用 PS 组合键改设置时写；
+  - `daemon.log`，记录按键名、会话状态和发出的按键（输入的文字只记字数，不记内容）；
+  - `daemon.stderr`、socket 和 pid 文件；
+  - `sounds/`，用 `afconvert` 转换给手柄用的 macOS 系统提示音；
+  - `venv/`。
+
+  `padpilot install-codex` 只在你运行它时才写 `~/.codex/hooks.json`，写之前先备份。
+- **按键（macOS）**：有辅助功能权限时，守护进程用 Quartz CGEvent 给 Claude 桌面 app 发按键。每次发之前都用 `lsappinfo` 确认 Claude app 在最前面，别的 app 在前面时什么都不发。打字、发送、清空之前，如果焦点在按钮或侧边栏上，它会用辅助功能接口把焦点移回输入框（焦点在文字框、菜单或对话框里时不动）。为此它会打开 Claude app 的辅助功能树，只读元素的类型和标签，不读里面的文字。`padpilot run` 则是直接输入到它自己的终端会话里。
+- **麦克风**：通过 CoreAudio 查询有没有 app 正在录音，用来点亮手柄的麦克风灯。它从不打开麦克风，也从不录音。
+- **声音**：提示音是 macOS 系统声音，在手柄自带的喇叭上播放（只在 USB 连接时）。
+- **教程和说明书页面**：在 `http://127.0.0.1:8737/` 和 `/manual` 提供，只回应来自这个地址的页面。页面的字体从 Google Fonts（`fonts.googleapis.com`）加载，这是 padpilot 页面唯一的联网请求。
 
 ## 故障排查
 

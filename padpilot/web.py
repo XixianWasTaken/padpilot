@@ -3,7 +3,7 @@
 While the page is open it is a practice-mode watcher: button presses stream to it (Server-Sent
 Events) and nothing is sent to any app. The controller stays opened exclusively, so macOS never
 sees the PS button (no Games app) and the page can read the mic button, which browsers cannot.
-Closing the tab ends practice mode; no terminal has to stay open.
+Closing the tab, or its "exit practice" button, ends practice mode; no terminal has to stay open.
 
 Only pages from this server may use it: the Host header must be 127.0.0.1/localhost (no DNS
 rebinding) and a request's Origin, when sent, must be this server's own.
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,7 +21,9 @@ from typing import Optional
 
 log = logging.getLogger("padpilot")
 
-PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tutorial.html")
+HERE = os.path.dirname(os.path.abspath(__file__))
+PAGE = os.path.join(HERE, "tutorial.html")
+MANUAL = os.path.join(HERE, "manual.html")  # a plain page: opening it is not practice mode
 HEARTBEAT_S = 1.0
 PREVIEW_MAX_S = 3600.0
 
@@ -39,6 +42,16 @@ def _make_handler(d, port: int):
             if msg is None:
                 return b": ping\n\n"
             return b"data: " + json.dumps(msg).encode() + b"\n\n"
+
+    def leave(token: str) -> bool:
+        """The page's "exit practice" button: drop that page's watcher, so practice mode ends
+        unless another page or `padpilot watch --practice` is still open."""
+        with d.lock:
+            for w in d.watchers:
+                if token and getattr(w, "token", None) == token:
+                    d.remove_watcher(w)
+                    return True
+        return False
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -67,12 +80,14 @@ def _make_handler(d, port: int):
             path = self.path.split("?", 1)[0]
             if not self._allowed(path == "/events"):
                 return self._send(403, b'{"error":"forbidden"}')
-            if path in ("/", "/tutorial", "/tutorial.html"):
+            page = PAGE if path in ("/", "/tutorial", "/tutorial.html") else (
+                MANUAL if path in ("/manual", "/manual.html") else None)
+            if page:
                 try:
-                    with open(PAGE, "rb") as f:
+                    with open(page, "rb") as f:
                         body = f.read()
                 except OSError:
-                    return self._send(404, b'{"error":"tutorial.html missing"}')
+                    return self._send(404, b'{"error":"page missing"}')
                 if not body.lstrip()[:9].lower().startswith(b"<!doctype"):
                     body = b"<!doctype html>\n" + body  # standards mode
                 return self._send(200, body, "text/html; charset=utf-8")
@@ -95,6 +110,8 @@ def _make_handler(d, port: int):
                 ok = d.web_rumble(str(msg.get("pattern", "")))
             elif path == "/light":
                 ok = d.web_light(str(msg.get("state", "")))
+            elif path == "/leave":
+                ok = leave(str(msg.get("id", "")))
             else:
                 return self._send(404, b'{"error":"not found"}')
             return self._send(200 if ok else 400, json.dumps({"ok": ok}).encode())
@@ -107,9 +124,10 @@ def _make_handler(d, port: int):
             self.end_headers()
             self.close_connection = True
             w = SseTarget("web", "", "", self.connection)
+            w.token = secrets.token_hex(8)  # lets this page end its own practice mode (/leave)
             with d.lock:
                 d.add_watcher(w, practice=True)
-                hello = {"op": "hello", "controller": d.dev is not None, "practice": True}
+                hello = {"op": "hello", "controller": d.dev is not None, "practice": True, "id": w.token}
             try:
                 if not w.send(hello):
                     return

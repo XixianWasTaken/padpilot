@@ -212,6 +212,13 @@ svg.spotlight .lbl { opacity: .7; } svg.spotlight .hit.target .lbl { opacity: 1;
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; font-size: 12.5px; color: var(--muted); }
 .foot button { background: none; border: 0; padding: 0; color: var(--cyan); text-decoration: underline; cursor: pointer; font-size: 12.5px; }
 .foot button:hover { color: var(--gold); }
+.foot a { color: var(--cyan); font-size: 12.5px; }
+.foot a:hover { color: var(--gold); }
+.foot .practice-btn { margin-left: 8px; padding: 3px 9px; font-family: var(--vt); font-size: 16px; line-height: 1.2; text-decoration: none;
+  color: var(--gold); background: var(--void); border: 2px solid var(--gold); cursor: pointer; }
+.foot .practice-btn:hover { color: var(--void); background: var(--gold); }
+.foot .practice-btn.join { color: var(--good); border-color: var(--good); }
+.foot .practice-btn.join:hover { color: var(--void); background: var(--good); }
 .dot { display: inline-block; width: 9px; height: 9px; background: var(--muted); margin-right: 6px; vertical-align: 0; }
 .dot.on { background: var(--good); box-shadow: 0 0 8px var(--good); animation: blinkk 1.2s steps(1) infinite; }
 .keys { --bc: var(--cyan); font-size: 12.5px; color: var(--muted); background: var(--panel); padding: 10px 14px; margin: 3px; }
@@ -334,8 +341,8 @@ html[lang="en"] .card-l h2 { font-size: 17px; line-height: 1.5; }
   </div>
 
   <div class="foot">
-    <span><span class="dot" id="pad-dot"></span><span id="pad-text"></span></span>
-    <span><button type="button" id="keys-btn"></button> · <button type="button" id="restart-btn"></button></span>
+    <span><span class="dot" id="pad-dot"></span><span id="pad-text"></span> <button type="button" class="practice-btn" id="practice-btn" hidden></button></span>
+    <span><a id="manual-link" href="manual.html"></a> · <button type="button" id="keys-btn"></button> · <button type="button" id="restart-btn"></button></span>
   </div>
   <div class="keys pixbox" id="keys" hidden><ul id="keys-list"></ul></div>
   <div class="web1">
@@ -661,10 +668,13 @@ function openStep(fresh) {
   renderProgress();
   spotlight(st.expect ? st.expect.slice(0, 1) : ["cross"]);
   let sub = "";
-  if (st.intro) sub = '<div class="note">' + (S.lang === "zh"
-    ? (DS.on ? "真手柄已接上，现在是练习模式：你按的键只在这个网页里生效，不会发给 Claude；关掉这个网页就退出练习。没手柄的话，也可以点图上的键或用键盘（见底下“键盘怎么按”）。"
+  if (st.intro) sub = '<div class="note">' + (DS.left ? (S.lang === "zh"
+    ? "已退出练习模式：手柄按键现在会发给 Claude，这个网页收不到。想接着练，点页面底下的「重新进入练习」。"
+    : "Practice mode is off: the controller drives Claude again and this page no longer sees it. To go on practising, press “Practise again” at the bottom of the page.")
+    : S.lang === "zh"
+    ? (DS.on ? "真手柄已接上，现在是练习模式：你按的键只在这个网页里生效，不会发给 Claude。点页面底下的「退出练习模式」，或者关掉这个网页，就退出练习。没手柄的话，也可以点图上的键或用键盘（见底下“键盘怎么按”）。"
              : "没手柄也行：直接点图上的键，或用键盘（见底下“键盘怎么按”）。想用真手柄练习，请在 Claude Code 里输入 <code>/padpilot:tutorial</code>（或在终端运行 <code>padpilot tutorial</code>）打开本页：那样打开的页面能读到手柄，按键也不会发给 Claude。")
-    : (DS.on ? "Your controller is connected and you are in practice mode: presses only count on this page and never reach Claude. Closing this page ends practice. You can also click the keys on the picture or use the keyboard (see “Keyboard keys” below)."
+    : (DS.on ? "Your controller is connected and you are in practice mode: presses only count on this page and never reach Claude. Press “Exit practice” at the bottom of the page, or close the page, to end practice. You can also click the keys on the picture or use the keyboard (see “Keyboard keys” below)."
              : "No controller? Click the keys on the picture or use the keyboard (see “Keyboard keys” below). To practise with the real controller, type <code>/padpilot:tutorial</code> in Claude Code (or run <code>padpilot tutorial</code>) to open this page: opened that way it reads the controller, and your presses won't reach Claude.")) + "</div>";
   if (!st.intro && gpName && !DS.on) {
     const keys = (st.expect || []).flatMap((a) => a.replace(/_hold$/, "").split("+"));
@@ -988,7 +998,13 @@ function pollPad() {
 function padText() {
   const zh = S.lang === "zh";
   $("pad-dot").classList.toggle("on", DS.on ? DS.pad : !!gpName);
-  $("pad-text").textContent = DS.on
+  const btn = $("practice-btn");
+  btn.hidden = !(DS.on || DS.left);
+  btn.classList.toggle("join", DS.left);
+  btn.textContent = DS.left ? (zh ? "重新进入练习" : "Practise again") : (zh ? "退出练习模式" : "Exit practice");
+  $("pad-text").textContent = DS.left
+    ? (zh ? "已退出练习：手柄按键现在会发给 Claude" : "Practice is off: the controller drives Claude again")
+    : DS.on
     ? (DS.pad ? (zh ? "真手柄已连接 · 练习模式（按键不会发给 Claude）" : "Controller connected · practice mode (nothing reaches Claude)")
               : (zh ? "练习模式已开，但手柄没接上（插上 USB 或用蓝牙连上）" : "Practice mode on, but no controller (plug it in or pair it)"))
     : DS.tried ? (zh ? "和 padpilot 断开了，正在重连…" : "Lost padpilot, reconnecting…")
@@ -999,7 +1015,7 @@ function padText() {
 // The page served by the padpilot daemon (`padpilot tutorial`): buttons arrive as Server-Sent Events
 // from the daemon, which keeps the controller to itself (macOS never sees PS; mic works too) and is
 // in practice mode while this page is open, so nothing reaches Claude.
-const DS = { on: false, pad: false, tried: false };
+const DS = { on: false, pad: false, tried: false, left: false, id: "", es: null };
 const DS_LOCAL = location.protocol === "http:" && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
 function dsPost(path, body) {
   if (!DS.on) return;
@@ -1008,11 +1024,12 @@ function dsPost(path, body) {
 function dsConnect() {
   if (!DS_LOCAL || typeof EventSource === "undefined") return;
   const es = new EventSource("/events");
+  DS.es = es;
   es.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.op === "hello") {
       const was = DS.on;
-      DS.on = true; DS.tried = true; DS.pad = !!m.controller; padText();
+      DS.on = true; DS.tried = true; DS.left = false; DS.id = m.id || ""; DS.pad = !!m.controller; padText();
       setLight(G.light);
       if (!was && G.phase === "ask" && STEPS[G.step]) openStep(false);
     } else if (m.op === "controller") { DS.pad = !!m.controller; padText(); }
@@ -1029,6 +1046,18 @@ function dsConnect() {
     DS.on = false; held.forEach((_, n) => visual(n, false)); held.clear(); padText();
   };
 }
+// "Exit practice": the daemon drops this page, so presses go to Claude again; the page stays open.
+function dsLeave() {
+  if (!DS.on) return;
+  const id = DS.id;
+  try { fetch("/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {}); } catch {}
+  if (DS.es) DS.es.close();
+  DS.es = null; DS.on = false; DS.left = true;
+  held.forEach((_, n) => visual(n, false)); held.clear(); padText();
+  if (G.phase === "ask" && STEPS[G.step]) openStep(false);   // the step's note says practice is off
+}
+function dsRejoin() { if (!DS.left) return; DS.left = false; padText(); dsConnect(); }
+$("practice-btn").addEventListener("click", () => (DS.left ? dsRejoin() : dsLeave()));
 window.addEventListener("gamepaddisconnected", () => { gpName = ""; padText(); });
 
 // ------------------------------------------------------------------ chrome, language, boot
@@ -1038,6 +1067,7 @@ function renderChrome() {
   $("lang-en").setAttribute("aria-pressed", String(S.lang === "en"));
   $("brand").textContent = S.lang === "zh" ? "手柄驾校" : "Pad School";
   $("keys-btn").textContent = S.lang === "zh" ? "键盘怎么按" : "Keyboard keys";
+  $("manual-link").textContent = S.lang === "zh" ? "说明书" : "Manual";
   $("restart-btn").textContent = S.lang === "zh" ? "从头开始" : "Start over";
   const items = S.lang === "zh"
     ? ["K ✕ · L ○ · J □ · I △（和手柄一样排成菱形）", "Q L1 · E R1 · Z L2 · C R2 · P PS · M 麦克风", "方向键 = 十字键 · Shift+方向键 = 右摇杆 · R = R3", "N Create · B Options · T 触摸板 · 回车 / 空格 = ✕", "组合键：按住 P / E / Q 再按另一个键 · 长按 P 或 N 约一秒", "提示轮盘：按住 I，按方向键，再松开 I"]

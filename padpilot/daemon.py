@@ -53,10 +53,10 @@ def needs_message_box(items: List[dict]) -> bool:
 
 
 def _describe(item: dict) -> str:
-    """A short form of a desktop key item for the log (text is cut, so prompts stay short)."""
+    """A short form of a desktop key item for the log. Typed text is logged by length only, so
+    no prompt or reply text ends up in the log."""
     if "text" in item:
-        t = str(item["text"]).replace("\n", "\\n")
-        return "text:" + (t[:24] + "…" if len(t) > 24 else t)
+        return f"text({len(str(item['text']))} chars)"
     return str(item.get("key", item))
 
 class Session:

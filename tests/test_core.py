@@ -1167,6 +1167,15 @@ class TutorialPageTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertTrue(body.lower().startswith(b"<!doctype html>"))
 
+    def test_manual_is_served_and_is_not_practice_mode(self):
+        for path in ("/manual", "/manual.html"):
+            code, body = self._req("GET", path)
+            self.assertEqual(code, 200)
+            self.assertTrue(body.lower().startswith(b"<!doctype html>"))
+            self.assertIn(b"padpilot Manual", body)
+        self.assertIsNone(self.d.practice)  # only the tutorial's event stream turns practice on
+        self.assertEqual(self._req("GET", "/manual", headers={"Host": "evil.example"})[0], 403)
+
     def test_other_hosts_and_origins_are_refused(self):
         self.assertEqual(self._req("GET", "/", headers={"Host": "evil.example"})[0], 403)
         self.assertEqual(self._req("GET", "/events", headers={"Origin": "https://evil.example"})[0], 403)
@@ -1197,6 +1206,27 @@ class TutorialPageTest(unittest.TestCase):
         self.assertIsNone(self.d.practice)  # closing the page ends practice
         self.assertIsNone(self.d.preview)
         self.assertEqual(self.d.watchers, [])
+
+    def test_exit_practice_button_ends_practice_with_the_page_open(self):
+        c = socket.create_connection(("127.0.0.1", self.port), timeout=3)
+        c.sendall(f"GET /events HTTP/1.1\r\nHost: 127.0.0.1:{self.port}\r\nOrigin: {self.origin}\r\n\r\n".encode())
+        buf = b""
+        while b'"hello"' not in buf:
+            buf += c.recv(4096)
+        hello = json.loads(buf.split(b"data: ", 1)[1].split(b"\n", 1)[0])
+        self.assertIsNotNone(self.d.practice)
+        post = lambda body, origin=self.origin: self._req("POST", "/leave", json.dumps(body).encode(),
+                                                          {"Origin": origin} if origin else {})
+        self.assertEqual(post({"id": hello["id"]}, origin=None)[0], 403)  # no Origin: refused
+        self.assertEqual(post({"id": "not-a-page"})[0], 400)              # unknown page: nothing ends
+        self.assertIsNotNone(self.d.practice)
+        self.assertEqual(post({"id": hello["id"]})[0], 200)
+        self.assertIsNone(self.d.practice)  # at once, while the page is still connected
+        sent = []
+        self.d._desktop_send = lambda items: sent.append(items) or True
+        self.d.handle_control("cross")
+        self.assertEqual(sent, [[{"key": "enter"}]])  # presses reach the app again
+        c.close()
 
 
 class RenameMigrationTest(unittest.TestCase):
