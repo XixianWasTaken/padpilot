@@ -44,7 +44,7 @@ alias cc='padpilot run claude'   # Claude Code, with the controller typing into 
 alias cx='padpilot run codex'    # Codex CLI
 ```
 
-`padpilot run` wraps the agent in a terminal that looks and works exactly as before; the controller's buttons become keystrokes. Without the wrapper (an IDE, or the agent started directly) the lights and rumble still work, and permission requests wait up to 45 seconds for ✕ (approve) or ○ (deny) before the normal dialog appears.
+`padpilot run` wraps the agent in a terminal that looks and works exactly as before; the controller's buttons become keystrokes. Without the wrapper (an IDE, or the agent started directly) the lights and rumble still work, and permission requests wait up to 45 seconds for ✕ (approve) or ○ (deny) before the normal dialog appears. A press in the first 0.6 seconds after a request appears does not answer it, because it was already on its way to something else: the pad buzzes twice, and the next press counts. An agent that a `padpilot run` session starts itself (`claude -p` from its shell tool) is left out; its events are not that session's.
 
 **Claude desktop app (macOS).** When no `padpilot run` session is open, buttons are sent as real key presses to the Claude app, but only while it is the frontmost window. While a `padpilot run` session is open the buttons go to it, with one exception: when the Claude app is in front with a question box open, and the terminal session is not asking or waiting itself, R1 + face button and Submit (✕, R2) answer that box. The first time, run `padpilot desktop` and allow Accessibility access for the daemon's Python.
 
@@ -57,7 +57,7 @@ alias cx='padpilot run codex'    # Codex CLI
 | Running a tool | fast breathing, coloured by tool (Bash orange, edits magenta, reads cyan, web blue, subagents purple) | a tick per call |
 | **Needs approval** | **blinking orange**; R2 gets a click point, pull through = approve | **two strong pulses**, repeated up to 3 times |
 | Waiting for your answer | yellow breathing | a nudge |
-| Done | **solid green until you press a key**; a long turn plays a rainbow first | success pattern |
+| Done | **solid green until you press a key** (for up to 12 hours); a long turn plays a rainbow first | success pattern |
 | Error | blinking red | long buzz |
 | Microphone in use | fast white breathing, mic LED on | tap on / tap off |
 
@@ -116,14 +116,14 @@ padpilot send "write a test"
 padpilot doctor
 ```
 
-Slash commands in Claude Code: `/padpilot:tutorial`, `/padpilot:status`, `/padpilot:demo`, `/padpilot:doctor`, `/padpilot:desktop`.
+Slash commands in Claude Code: `/padpilot:tutorial`, `/padpilot:status`, `/padpilot:demo`, `/padpilot:doctor`, `/padpilot:desktop`. Each one may run only its own `padpilot` subcommand without asking.
 
 ## What padpilot runs, reads and sends
 
 Everything runs on your own computer. padpilot has no server and no telemetry, and nothing about your sessions leaves the machine. The full list:
 
 - **Hooks.** Claude Code runs `bin/padpilot hook claude` on these events: SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PermissionRequest, PermissionDenied, PostToolUse, PostToolUseFailure, Notification, Stop, StopFailure, SubagentStop, PreCompact, PostCompact and Elicitation. Each run sends one small message to the padpilot daemon over a local Unix socket (`~/.padpilot/daemon.sock`). The message holds the event name, session id, working folder and tool name. On UserPromptSubmit it also holds your prompt, kept in the daemon's memory for the R3 retry button and never written to disk. When Claude shows a next-step card, it holds the labels of the card's buttons; for a question box, the option labels and whether several may be picked (not the question itself).
-- **Permission requests.** Without `padpilot run`, the PermissionRequest hook waits up to 45 seconds (`hook_approval_timeout_s`). It answers allow when you press ✕ and deny when you press ○; otherwise Claude Code shows its normal dialog. A question box's permission request is not held; it is answered in the box.
+- **Permission requests.** Without `padpilot run`, the PermissionRequest hook waits up to 45 seconds (`hook_approval_timeout_s`). It answers allow when you press ✕ and deny when you press ○; otherwise Claude Code shows its normal dialog. A question box's permission request is not held; it is answered in the box. A press within 0.6 seconds (`approval_grace_ms`) after a request appears does not answer it, and neither does Enter on a prompt that has just appeared in a `padpilot run` session. Practice mode does not hold requests. `padpilot press` and `padpilot send` never answer a permission request; only the controller does.
 - **The daemon.** The first hook starts a background process that opens the DualSense over USB or Bluetooth (HID). It exits after 4 hours without activity (`idle_shutdown_minutes`), or with `padpilot stop`.
 - **One download.** The first time the daemon is needed, padpilot creates `~/.padpilot/venv` and installs `hidapi==0.15.0` from PyPI with pip. That is the only thing padpilot downloads.
 - **Files it reads.**
@@ -138,7 +138,7 @@ Everything runs on your own computer. padpilot has no server and no telemetry, a
   - the `venv/`.
 
   `padpilot install-codex` writes `~/.codex/hooks.json`, after backing it up, only when you run it.
-- **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending, clearing or interrupting (Esc), it uses the Accessibility API to move keyboard focus to the message box if a button or the sidebar has it (a text field, menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. `padpilot run` types into its own terminal session instead.
+- **Keystrokes (macOS).** With Accessibility permission, the daemon posts key presses (Quartz CGEvents) to the Claude desktop app. Before each press it checks with `lsappinfo` that the Claude app is the frontmost app, and sends nothing when another app is in front. Before typing, sending, clearing or interrupting (Esc), it uses the Accessibility API to move keyboard focus to the message box if a button or the sidebar has it (a text field, menu or dialog keeps it). For this it turns on the Claude app's accessibility tree and reads element roles and labels, never their text. Shortcut letters are posted at the position they have on your keyboard layout (Cmd+A on a French keyboard is not Cmd+Q); a short-lived child process reads the layout, at most every three seconds and only for those keys. `padpilot run` types into its own terminal session instead.
 - **Microphone.** It asks CoreAudio whether any app is recording, to light the controller's mic LED. It never opens the microphone and never records audio.
 - **Sound.** Cues are macOS system sounds played on the controller's own speaker (USB only).
 - **Tutorial and manual pages.** Served on `http://127.0.0.1:8737/` and `/manual`, answering only pages from that address. Their fonts come with padpilot (`padpilot/fonts/`, SIL Open Font License), so the pages load nothing from the internet.

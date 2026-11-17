@@ -62,7 +62,7 @@ alias cx='padpilot run codex'
 | tool 调工具 | 按工具类型变色的快呼吸，每次调用闪一下（见下表） | 按工具类型 | PreToolUse |
 | **permission 等审批** | **橙色闪烁** | **强双震，20 秒后再提醒，最多 3 次** | PermissionRequest / Notification(permission_prompt) |
 | waiting 等你输入 | 黄色呼吸 | 轻推一下 | Notification(idle_prompt…) / Elicitation |
-| done 完成 | **绿色常亮，按任意键才熄**；10 分钟没理会再提醒一次；**本轮超过 60 秒则先放 2 秒彩虹** | 成功节奏；长任务是更长的 fanfare；提醒时轻推一下 | Stop |
+| done 完成 | **绿色常亮，按任意键才熄**（最多保留 12 小时）；10 分钟没理会再提醒一次；**本轮超过 60 秒则先放 2 秒彩虹** | 成功节奏；长任务是更长的 fanfare；提醒时轻推一下 | Stop |
 | error 出错 | 红色闪烁 | 长震 | StopFailure（API 错误） |
 | 工具失败 | 红闪 | buzz | PostToolUseFailure |
 | compacting 压缩 | 紫色呼吸 | – | PreCompact |
@@ -143,7 +143,7 @@ alias cx='padpilot run codex'
 
 #### 下一步卡片（R1 + 面键）
 
-Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“先做第一批 / 全部做”）。插件的 hook 在 Claude 调用 `wrap_up` 时记下按钮文字，**R1 + ✕ 选第 1 个，R1 + ○ 选第 2 个**，效果和点击一样：清空输入框，输入按钮文字，发送。卡片出现时手柄轻点两下，玩家灯亮出按钮个数。“提交 / 建 PR”这类 app 自己处理的按钮不能用手柄按，按了是“不行”的两下短震；发了新消息后旧卡片作废。Claude 中途弹出的提问框（几个选项加 Skip / Submit）也用 **R1 + 面键** 选第 1–4 个选项：单选题选完直接提交；多选题每按一次勾上或取消，选好按 ✕ 提交。提问框开着时光条是等你回答的黄色；Claude Code 为提问框发的权限请求不会被当成审批，所以 ✕ 不会被它吃掉。daemon 从 hook 拿到选项文字，再用辅助功能接口找到这些选项，聚焦后按一下空格来选，然后按下 Submit。“Other” 自己写答案仍要用鼠标。daemon 重启后（比如闲置 4 小时自动退出过）它不记得之前的卡片，要等下一张卡片出现才能选。
+Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“先做第一批 / 全部做”）。插件的 hook 在 Claude 调用 `wrap_up` 时记下按钮文字，**R1 + ✕ 选第 1 个，R1 + ○ 选第 2 个**，效果和点击一样：清空输入框，输入按钮文字，发送。卡片出现时手柄轻点两下，玩家灯亮出按钮个数。“提交 / 建 PR”这类 app 自己处理的按钮不能用手柄按，按了是“不行”的两下短震；发了新消息后旧卡片作废。Claude 中途弹出的提问框（几个选项加 Skip / Submit）也用 **R1 + 面键** 选第 1–4 个选项：单选题选完直接提交；多选题每按一次勾上或取消，选好按 ✕ 提交。提问框开着时光条是等你回答的黄色；Claude Code 为提问框发的权限请求不会被当成审批，所以 ✕ 不会被它吃掉。daemon 从 hook 拿到选项文字，再用辅助功能接口找到这些选项，聚焦后按一下空格来选，然后按下 Submit。“Other” 自己写答案仍要用鼠标。提交一页大约要一秒，这期间再按的那一下会被丢掉，不会落到下一页上。卡片和回合结束后的绿灯会保留 12 小时。daemon 重启后（比如闲置 4 小时自动退出过）它不记得之前的卡片，要等下一张卡片出现才能选。
 
 #### 重试（R3）
 
@@ -163,7 +163,7 @@ Claude 桌面 app 在回合结束时可能给出带按钮的卡片（比如“�
 - **Claude 桌面 app**：读取 `~/Library/Application Support/Claude/claude_desktop_config.json` 里的听写快捷键（`preferences.dictationShortcut`）。默认 ⌘D；改过的话用你的组合键；关掉了的话，按麦克风键红闪。
 - 读不到的：桌面 app 里“回车发送还是 ⌘回车发送”看起来是账号级的网页设置，本地没有存，所以 ✕ 固定发回车。Codex CLI 没有快捷键配置文件，用它的固定快捷键。
 
-有会话请求审批时，焦点会自动切到那个会话，所以按 ✕ 批准的一定是正在等审批的那个。
+有会话请求审批时，焦点会自动切到那个会话，所以按 ✕ 批准的一定是正在等审批的那个。请求刚出现的 0.6 秒内按下的 ✕ 不算数（那一下本来是按给别处的），手柄短震两下，再按一次才生效。
 
 ## 手柄喇叭提示音
 
@@ -193,6 +193,9 @@ Claude 桌面端、IDE 或直接运行的 `claude` / `codex` 没有 PTY 可以�
 - ○ 或 L2：**拒绝**，拒绝消息会返回给 agent
 - △：交回屏幕上的对话框处理
 - 超时，或手柄没连接：直接显示正常的对话框
+- 请求出现后 0.6 秒内（`approval_grace_ms`）按的 ✕ / ○ 不算数，手柄短震两下，再按一次
+- 练习模式下不等手柄，直接显示对话框
+- `padpilot press` 和 `padpilot send` 不能回答权限请求，只有真手柄可以
 
 注意：在这 45 秒里屏幕上不会出现审批对话框。不想要这种行为的话，在配置里把 `"hook_approval_timeout_s"` 设为 `0`。设为 `0` 后，桌面 app 会直接显示审批卡片，但那张卡片不认手柄发的 Enter 和 ⌘↩（2026-11-16 实测），只能用鼠标点。
 
@@ -248,7 +251,7 @@ padpilot status            # JSON：手柄、电量、会话状态
 padpilot send "写个测试"    # 往焦点会话（或桌面 app）输入文字并回车；--no-enter 只输入不回车
 padpilot desktop           # macOS：桌面 app 控制的权限和状态
 padpilot keys              # 按键布局，以及按你当前的快捷键设置，每个键在各个程序里实际发什么
-padpilot press cross       # 模拟按键，方便调试和写脚本
+padpilot press cross       # 模拟按键，方便调试和写脚本（不能用来回答权限请求）
 padpilot tutorial          # 打开新手教程网页；网页开着就是练习模式
 padpilot manual            # 打开中英双语的说明书
 padpilot watch --practice  # 终端版练习模式：灯和震动照常，但不往任何 app 发键；实时显示每个键按了多久、识别成什么（守护进程重启后自动重连）
@@ -256,7 +259,7 @@ padpilot rumble success    # 播放一段震动
 padpilot uninstall-codex
 ```
 
-插件里的斜杠命令：`/padpilot:tutorial`、`/padpilot:status`、`/padpilot:demo`、`/padpilot:doctor`、`/padpilot:desktop`。
+插件里的斜杠命令：`/padpilot:tutorial`、`/padpilot:status`、`/padpilot:demo`、`/padpilot:doctor`、`/padpilot:desktop`。每个命令只预先放行它自己那个 `padpilot` 子命令。
 
 ### 新手教程
 
@@ -274,7 +277,7 @@ padpilot uninstall-codex
 所有东西都在你自己的电脑上运行。padpilot 没有服务器，不收集使用数据，会话里的任何内容都不会离开这台电脑。完整列表：
 
 - **Hooks**：Claude Code 在这些事件上运行 `bin/padpilot hook claude`：SessionStart、SessionEnd、UserPromptSubmit、PreToolUse、PermissionRequest、PermissionDenied、PostToolUse、PostToolUseFailure、Notification、Stop、StopFailure、SubagentStop、PreCompact、PostCompact、Elicitation。每次运行通过本机的 Unix socket（`~/.padpilot/daemon.sock`）给守护进程发一条小消息，内容是事件名、会话 id、工作目录和工具名。UserPromptSubmit 时还带上你发的消息，只存在守护进程的内存里，供 R3 重发用，不写到磁盘。Claude 给出下一步卡片时，带上卡片上按钮的文字；弹出提问框时，带上选项文字和是否多选（不带问题本身）。
-- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。提问框的权限请求不会被拦下等待，直接在提问框里回答。
+- **权限审批**：不走 `padpilot run` 时，PermissionRequest hook 最多等 45 秒（`hook_approval_timeout_s`）。按 ✕ 回答允许，按 ○ 回答拒绝；不按的话，Claude Code 照常弹出它自己的对话框。提问框的权限请求不会被拦下等待，直接在提问框里回答。请求出现后 0.6 秒内（`approval_grace_ms`）的按键不算回答；`padpilot run` 会话里刚弹出的确认框，这段时间内也不接受回车。练习模式下不拦请求。`padpilot press` 和 `padpilot send` 不能回答权限请求。
 - **守护进程**：第一个 hook 会启动一个后台进程，通过 USB 或蓝牙（HID）打开手柄。4 小时没有活动会自动退出（`idle_shutdown_minutes`），也可以用 `padpilot stop` 停掉。
 - **唯一一次下载**：第一次需要守护进程时，padpilot 会创建 `~/.padpilot/venv`，并用 pip 从 PyPI 安装 `hidapi==0.15.0`。这是 padpilot 唯一会下载的东西。
 - **读取的文件**：
@@ -289,7 +292,7 @@ padpilot uninstall-codex
   - `venv/`。
 
   `padpilot install-codex` 只在你运行它时才写 `~/.codex/hooks.json`，写之前先备份。
-- **按键（macOS）**：有辅助功能权限时，守护进程用 Quartz CGEvent 给 Claude 桌面 app 发按键。每次发之前都用 `lsappinfo` 确认 Claude app 在最前面，别的 app 在前面时什么都不发。打字、发送、清空、中断（Esc）之前，如果焦点在按钮或侧边栏上，它会用辅助功能接口把焦点移回输入框（焦点在文字框、菜单或对话框里时不动）。为此它会打开 Claude app 的辅助功能树，只读元素的类型和标签，不读里面的文字。`padpilot run` 则是直接输入到它自己的终端会话里。
+- **按键（macOS）**：有辅助功能权限时，守护进程用 Quartz CGEvent 给 Claude 桌面 app 发按键。每次发之前都用 `lsappinfo` 确认 Claude app 在最前面，别的 app 在前面时什么都不发。打字、发送、清空、中断（Esc）之前，如果焦点在按钮或侧边栏上，它会用辅助功能接口把焦点移回输入框（焦点在文字框、菜单或对话框里时不动）。为此它会打开 Claude app 的辅助功能树，只读元素的类型和标签，不读里面的文字。快捷键里的字母按你当前键盘布局上的位置发（法语键盘上的 Cmd+A 不会变成 Cmd+Q）；布局由一个很快结束的子进程读取，最多每 3 秒读一次，而且只在发这类键时读。`padpilot run` 则是直接输入到它自己的终端会话里。
 - **麦克风**：通过 CoreAudio 查询有没有 app 正在录音，用来点亮手柄的麦克风灯。它从不打开麦克风，也从不录音。
 - **声音**：提示音是 macOS 系统声音，在手柄自带的喇叭上播放（只在 USB 连接时）。
 - **教程和说明书页面**：在 `http://127.0.0.1:8737/` 和 `/manual` 提供，只回应来自这个地址的页面。页面用的字体随 padpilot 一起提供（`padpilot/fonts/`，SIL 开源字体协议），页面不从网上加载任何东西。
