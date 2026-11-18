@@ -254,8 +254,8 @@ td.na { color: #6f5c96; }
   <!-- ===================== 01 start ===================== -->
   <section class="ch pixbox" id="start">
     <h2><span class="no">01</span><span class="zh">开始</span><span class="en">Getting started</span></h2>
-    <p class="zh">需要一只 DualSense 手柄（USB 或蓝牙）、macOS 和 Python 3.8 或更新的版本。Linux 上终端部分应该能用，但没测过；控制 Claude 桌面 app 只支持 macOS。</p>
-    <p class="en">You need a DualSense (USB or Bluetooth), macOS, and Python 3.8 or newer. The terminal parts should work on Linux but are untested; driving the Claude desktop app is macOS only.</p>
+    <p class="zh">需要一只 DualSense 手柄（USB 或蓝牙）、macOS 和 Python ≥ 3.8（终端模式在 Linux 下也可运行；控制 Claude 桌面 app 仅支持 macOS）。</p>
+    <p class="en">Requires a DualSense controller (USB or Bluetooth), macOS, and Python ≥ 3.8 (terminal features also work on Linux; Claude desktop app control is macOS-only).</p>
     <pre><code>git clone https://github.com/XixianWasTaken/padpilot.git
 cd padpilot
 ./bin/padpilot setup                              <span class="c"># hidapi → ~/.padpilot/venv</span>
@@ -267,11 +267,19 @@ claude plugin install padpilot@padpilot
 padpilot install-codex   <span class="c"># optional: Codex hooks</span>
 padpilot doctor          <span class="c"># hidapi, controller, daemon</span>
 padpilot demo            <span class="c"># rainbow + rumble</span></code></pre>
-    <h3><span class="zh">每天这样用</span><span class="en">Every day</span></h3>
+    <h3><span class="zh">三种使用模式</span><span class="en">Three ways to use it</span></h3>
     <pre><code>alias cc='padpilot run claude'   <span class="c"># Claude Code</span>
 alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
-    <p class="zh"><code>padpilot run</code> 把 agent 包在一个看起来和原来一模一样的终端里，手柄按键变成键盘输入。不经过它（IDE、Claude 桌面 app、直接运行的 agent）时，灯光和震动照常工作，审批改由 hook 处理（见第 06 章）。没有人值守的后台任务（<code>claude -p</code>）不会驱动手柄。</p>
-    <p class="en"><code>padpilot run</code> wraps the agent in a terminal that looks and works exactly as before; the buttons become keystrokes. Without it (an IDE, the Claude desktop app, an agent started directly) the light and rumble still work, and approvals go through a hook (chapter 06). A session nobody attends (<code>claude -p</code>) does not drive the controller.</p>
+    <ul class="zh">
+      <li><b>终端包装模式（推荐）</b>：用 <code>padpilot run</code> 启动，界面与原来完全一致，手柄全键位直接注入终端。</li>
+      <li><b>Claude 桌面 app（macOS）</b>：当窗口在最前时，手柄可直接输入、点选卡片、开启语音听写（第 07 章）。</li>
+      <li><b>纯 Hook 模式（IDE / 直接启动）</b>：灯光、震动与提示音照常工作，权限审批通过 Hook 拦截处理（第 06 章）。无人值守的后台任务（<code>claude -p</code>）不会惊动手柄。</li>
+    </ul>
+    <ul class="en">
+      <li><b>Terminal wrapper (recommended)</b>: start with <code>padpilot run</code> for full button control inside your normal terminal.</li>
+      <li><b>Claude desktop app (macOS)</b>: while frontmost, the controller types, picks reply cards, and toggles voice dictation (chapter 07).</li>
+      <li><b>Hook-only mode (IDEs / raw CLI)</b>: lights, rumble, and audio work as usual, and approvals are handled via hooks (chapter 06). Unattended runs (<code>claude -p</code>) never trigger the controller.</li>
+    </ul>
     <p class="tip"><span class="zh">第一次用？先去 <a href="tutorial.html">手柄驾校</a> 一步一个键练一遍，或在 Claude Code 里输入 <code>/padpilot:tutorial</code>。</span><span class="en">New here? Learn one button at a time at <a href="tutorial.html">Pad School</a>, or type <code>/padpilot:tutorial</code> in Claude Code.</span></p>
   </section>
 
@@ -292,7 +300,7 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
         <tr><td><span class="zh">压缩上下文</span><span class="en">Compacting</span></td><td><i class="sw breathe" style="--c:#aa00ff;--p:1.6s"></i><span class="zh">紫色呼吸</span><span class="en">purple breathing</span></td><td class="na">–</td></tr>
         <tr><td><span class="zh">有 app 在录音</span><span class="en">Mic in use</span></td><td><i class="sw breathe" style="--c:#ffffff;--p:1s"></i><span class="zh">白色快呼吸，麦克风灯亮</span><span class="en">fast white breathing, mic LED on</span></td><td><span class="zh">开麦、关麦各点一下</span><span class="en">a tap on, a tap off</span></td></tr>
         <tr><td><span class="zh">按了但做不了</span><span class="en">Can't do that</span></td><td><i class="sw blink" style="--c:#ff0000;--p:.5s"></i><span class="zh">红闪一下</span><span class="en">one red flash</span></td><td><b><span class="zh">两下短震（“不行”）</span><span class="en">two short buzzes (“no”)</span></b></td></tr>
-        <tr><td><span class="zh">电量低（≤15%）</span><span class="en">Battery low (≤15%)</span></td><td><i class="sw blink" style="--c:#ff0000;--p:1.2s"></i><span class="zh">红闪</span><span class="en">red flash</span></td><td><span class="zh">三下长震，5 分钟最多一次</span><span class="en">three long buzzes, at most every 5 min</span></td></tr>
+        <tr><td><span class="zh">电量低（≤15%）</span><span class="en">Battery low (≤15%)</span></td><td><i class="sw blink" style="--c:#ff0000;--p:1.2s"></i><span class="zh">红闪</span><span class="en">red flash</span></td><td><span class="zh">两下短震，5 分钟最多一次</span><span class="en">two short buzzes, at most every 5 min</span></td></tr>
       </tbody>
     </table></div>
     <h3><span class="zh">工具的颜色</span><span class="en">Tool colours</span></h3>
@@ -383,8 +391,8 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
   <section class="ch pixbox" id="moves">
     <h2><span class="no">05</span><span class="zh">进阶招式</span><span class="en">Pro moves</span></h2>
     <h3><span class="zh">快捷语轮盘：按住 △ + 右摇杆</span><span class="en">Prompt wheel: hold △ + right stick</span></h3>
-    <p class="zh">按住 △，把右摇杆推向一个方向，松开 △：清空输入框，填进那句话（不发送，你可以再改，按 ✕ 发出）。默认是英文，和 △ 短按输入的 <code>continue</code> 一样。拨到新方向时轻震一下，光条变成那个方向的颜色。</p>
-    <p class="en">Hold △, push the right stick one way, let go of △: the input box is cleared and that prompt is filled in (not sent, so you can edit it; ✕ sends). Each new direction gives a small tick and its own lightbar colour.</p>
+    <p class="zh">按住 △，把右摇杆推向任一方向，松开 △ 即可清空输入框并填入该指令（不直接发送，确认或修改后按 ✕ 发出）。每格对应独立的光条颜色与轻震反馈。</p>
+    <p class="en">Hold △, push the right stick in any direction, and release △ to clear the input box and fill in that prompt (press ✕ to send after reviewing). Each direction has its own lightbar colour and haptic tick.</p>
     <div class="wheel" aria-label="Prompt wheel">
       <div><span><i>↖</i><span class="zh">keep fixing this bug<br><small>继续修这个 bug</small></span><span class="en">keep fixing this bug</span></span></div>
       <div><span><i>↑</i><span class="zh">continue<br><small>继续</small></span><span class="en">continue</span></span></div>
@@ -396,46 +404,55 @@ alias cx='padpilot run codex'    <span class="c"># Codex CLI</span></code></pre>
       <div><span><i>↓</i><span class="zh">commit<br><small>提交代码</small></span><span class="en">commit</span></span></div>
       <div><span><i>↘</i><span class="zh">stop and ask me first<br><small>先停下来，问我再继续</small></span><span class="en">stop and ask me first</span></span></div>
     </div>
-    <p class="tip"><span class="zh">这 8 句可以在设置里的 <code>"prompt_wheel"</code> 改成你自己的，用中文也行（第 10 章有例子）。</span><span class="en">Change the eight prompts with <code>"prompt_wheel"</code> in the settings.</span></p>
+    <p class="tip"><span class="zh">这 8 句可在设置里的 <code>"prompt_wheel"</code> 改成你习惯的中文或英文指令（见第 10 章）。</span><span class="en">Customise all eight prompts via <code>"prompt_wheel"</code> in your settings (see chapter 10).</span></p>
 
-    <h3><span class="zh">重试：R3</span><span class="en">Retry: R3</span></h3>
-    <p class="zh">不小心中断了，或者想再跑一遍：按 <b>R3</b>（按下右摇杆），把你上一条消息原样再发一次。桌面 app 里只填进输入框不发送，因为它不告诉我们屏幕上是哪个会话，你看一眼再按 ✕。agent 还在干活时按 R3 会“不行”两下短震；你确定它已经停了（比如用鼠标点了停止），2 秒内再按一次就强制重发。</p>
-    <p class="en">Interrupted by mistake, or want another run? Press <b>R3</b> (click the right stick) to send your last message again. In the desktop app it is only filled in, because the app does not say which session is on screen; check it and press ✕. While the agent still works, R3 gives the two-buzz “no”; if you know it has stopped (say you clicked stop with the mouse), press R3 again within 2 seconds to force it.</p>
+    <h3><span class="zh">重试上一条：R3</span><span class="en">Retry last prompt: R3</span></h3>
+    <p class="zh">不小心打断了，或者想再跑一遍？按 <b>R3</b>（按下右摇杆）原样重发上一条消息。在桌面 app 中只填入不自动发送，确认窗口无误后按 ✕ 发出。若 agent 仍在干活，按 R3 会双震拒绝；2 秒内连按两次可强制重发。</p>
+    <p class="en">Interrupted by mistake, or want another run? Press <b>R3</b> (click the right stick) to resend your last prompt. In the desktop app it fills the prompt into the input box so you can verify the active window and press ✕. While the agent is busy, R3 gives a two-buzz refusal; double-press R3 within 2 seconds to force it.</p>
 
     <h3><span class="zh">下一步卡片：R1 + 面键</span><span class="en">Next-step card: R1 + face button</span></h3>
-    <p class="zh">Claude 桌面 app 在一轮结束时可能给出带按钮的卡片。卡片出现时手柄轻点两下，玩家灯亮出按钮个数。<b>R1 + ✕</b> 选第 1 个，<b>R1 + ○</b> 选第 2 个，以此类推，效果和点击一样。“提交 / 建 PR”这类 app 自己处理的按钮只能用鼠标点。</p>
-    <h3><span class="zh">提问框：也是 R1 + 面键</span><span class="en">Question box: R1 + face button too</span></h3>
-    <p class="zh">Claude 中途弹出的<b>提问框</b>（几个选项加 Skip / Submit）出现时，手柄轻点两下。<b>R1 + ✕ / ○ / □ / △</b> 选第 1–4 个选项：单选题选完直接提交；<b>多选题</b>每按一次勾上或取消一个，选好后按 <b>✕</b> 提交。单选题只按 ✕ 就是提交默认选中的那一项。提问框开着时光条是等你回答的黄色，✕ 不会被当成“批准”。方向键在提问框上不起作用，“Other”（自己写答案）请用鼠标。提交一页大约要一秒，这期间再按一次不会算到下一页上。提问框不在屏幕上时（它属于另一个会话），按键照常处理：✕ 就是回车。开着 <code>padpilot run</code> 终端时也一样：只要 Claude app 在最前面、终端那边没在等你回答，这几个键就去回答提问框，其余按键照旧发给终端。</p>
-    <p class="en">When Claude shows a <b>question box</b> mid-turn (several options plus Skip / Submit), the controller taps twice. <b>R1 + ✕ / ○ / □ / △</b> picks option 1–4: a single-choice question is submitted at once; on a <b>multiple-choice</b> one each press ticks or unticks an option, then <b>✕</b> submits. On a single-choice question ✕ alone submits the option already selected. While the box is open the lightbar shows the yellow "waiting for your answer", and ✕ is not taken as an approval. The D-pad does not move through the box, and "Other" (your own answer) needs the mouse. Submitting a page takes about a second, and a second press during that time is not carried over to the next page. A question box that is not on screen (it belongs to another session) takes no presses: ✕ is Enter as usual. This works with a <code>padpilot run</code> terminal open too: while the Claude app is in front and the terminal is not waiting for you, these buttons answer the box and the rest still go to the terminal.</p>
-    <p class="en">At the end of a turn the Claude desktop app may show a card with reply buttons. The controller taps twice and the player LEDs show how many there are. <b>R1 + ✕</b> picks the first, <b>R1 + ○</b> the second, and so on, just like clicking. Buttons the app handles itself, such as commit or create PR, still need the mouse.</p>
+    <p class="zh">Claude 桌面 app 在回合结束给出建议卡片时，手柄会轻点两下，玩家灯亮起代表可选按钮数。按 <b>R1 + ✕ / ○ / □ / △</b> 直接点选第 1–4 个按钮（“提交 / 建 PR”等客户端内部按钮仍需用鼠标）。</p>
+    <p class="en">When the Claude desktop app shows a wrap-up card with reply buttons, the controller taps twice and the player LEDs show how many buttons are available. Press <b>R1 + ✕ / ○ / □ / △</b> to click button 1–4 (app-internal buttons like Commit or Create PR still require the mouse).</p>
 
-    <h3><span class="zh">按住说话：mic</span><span class="en">Hold to talk: mic</span></h3>
-    <p class="zh">在桌面 app 里，麦克风键就是 Claude 自带的听写。短按开始、再按结束；或者按住说话（超过 0.5 秒），松开就停。听写时光条白色快呼吸、麦克风灯亮。</p>
-    <p class="en">In the desktop app the mic button is Claude's own dictation. Tap to start and tap to stop, or hold it (over 0.5 s) and talk; letting go stops. While dictating, the light breathes white and the mic LED is on.</p>
+    <h3><span class="zh">中途提问框：R1 + 面键</span><span class="en">Question box: R1 + face button</span></h3>
+    <p class="zh">Claude 中途弹出<b>提问框</b>时，光条呈黄色呼吸并轻震两下，用 <b>R1 + ✕ / ○ / □ / △</b> 选择第 1–4 项：</p>
+    <ul class="zh">
+      <li><b>单选题</b>：按组合键选中即提交；直接单按 <b>✕</b> 则提交默认高亮项。</li>
+      <li><b>多选题</b>：按组合键勾选或取消，选好后按 <b>✕</b> 提交。</li>
+      <li>自定义填写（Other）请用鼠标。哪怕同时开着 <code>padpilot run</code> 终端，只要 Claude 桌面 app 在最前且打开了提问框，这组按键也会优先回答提问框。</li>
+    </ul>
+    <p class="en">When Claude opens a mid-turn <b>question box</b>, the lightbar breathes yellow and taps twice. Use <b>R1 + ✕ / ○ / □ / △</b> to pick option 1–4:</p>
+    <ul class="en">
+      <li><b>Single-choice</b>: picking an option submits immediately; pressing <b>✕</b> alone submits the default selection.</li>
+      <li><b>Multiple-choice</b>: each combo toggles an option on or off, then <b>✕</b> submits.</li>
+      <li>Free-form "Other" answers use the mouse. Even with a <code>padpilot run</code> terminal open, if the Claude desktop app is in front with a question box open, these keys answer that box first.</li>
+    </ul>
+
+    <h3><span class="zh">语音听写：mic</span><span class="en">Voice dictation: mic</span></h3>
+    <p class="zh">在桌面 app 里，麦克风键联动 Claude 自带的听写：短按开始、再按结束；或按住超过 0.5 秒说话、松开即停。听写期间光条白色快呼吸、麦克风灯常亮。</p>
+    <p class="en">In the desktop app, the mic button triggers Claude's built-in dictation: tap to start/stop, or hold (>0.5 s) for push-to-talk. While recording, the lightbar breathes white and the mic LED stays lit.</p>
   </section>
 
   <!-- ===================== 06 approvals ===================== -->
   <section class="ch pixbox" id="approve">
     <h2><span class="no">06</span><span class="zh">审批</span><span class="en">Approvals</span></h2>
-    <p class="zh">agent 要权限时，光条橙色闪烁、手柄强双震。用 <code>padpilot run</code> 时，屏幕上的对话框照常出现，✕ 就是回车。不用它时（桌面 app、IDE、直接运行的 agent），hook 最多等你 45 秒：</p>
-    <p class="en">When the agent asks for permission, the light blinks orange and the controller pulses twice. With <code>padpilot run</code>, the normal dialog appears and ✕ is Enter. Without it (desktop app, IDE, an agent started directly), a hook waits up to 45 seconds for you:</p>
+    <p class="zh">当 agent 请求权限时，光条橙色快闪、手柄强双震、R2 扳机产生段落阻力。在 <code>padpilot run</code> 终端里，✕ 直接发送回车确认；在不经包装的桌面 app 或 IDE 中，Hook 最多等待手柄 45 秒：</p>
+    <p class="en">When the agent asks for permission, the light blinks orange, the pad pulses twice, and R2 engages a tactile click-point. Inside <code>padpilot run</code>, ✕ sends Enter; in the desktop app or an IDE, the hook waits up to 45 seconds:</p>
     <ul class="zh">
-      <li><span class="sym crs">✕</span> 或 R2 扣到底：<b>批准</b></li>
-      <li><span class="sym cir">○</span> 或 L2 扣到底：<b>拒绝</b>，拒绝的原因会告诉 agent</li>
-      <li><span class="sym tri">△</span>：交回屏幕上的对话框</li>
-      <li>超时或手柄没连：由屏幕上的对话框决定</li>
-      <li>计划也一样：Claude 要离开计划模式时，<span class="sym crs">✕</span> 批准计划，<span class="sym cir">○</span> 驳回。批准后回到进入计划模式之前的模式；别的选项在屏幕上选</li>
-      <li>只有在你用手柄的时候才会等：最近 5 分钟按过手柄，或者你最后碰的是手柄（之后没动过键盘鼠标）。否则只由屏幕上的对话框决定</li>
+      <li><span class="sym crs">✕</span> 或 R2 扣到底：<b>批准</b>（包括批准离开计划模式的方案）</li>
+      <li><span class="sym cir">○</span> 或 L2 扣到底：<b>拒绝</b>，并向 agent 返回拒绝消息</li>
+      <li><span class="sym tri">△</span>（或超时 / 未连手柄）：交由屏幕上的对话框决定</li>
+      <li><b>屏幕与手柄同时有效</b>：谁先点算谁的；多会话时焦点会自动切到正在等审批的会话。</li>
+      <li><b>智能防误触</b>：仅在你最近 5 分钟用过手柄（或最后碰的是手柄而非键鼠）时才等待手柄；弹窗刚出现的 0.6 秒内按下的 ✕ 会被拦截并短震两下，再按一次才生效。</li>
     </ul>
     <ul class="en">
-      <li><span class="sym crs">✕</span> or R2 pulled through: <b>approve</b></li>
-      <li><span class="sym cir">○</span> or L2 pulled through: <b>deny</b>; the agent is told why</li>
-      <li><span class="sym tri">△</span>: hand it back to the dialog on screen</li>
-      <li>time out, or no controller: the dialog on screen decides</li>
-      <li>a plan too: when Claude asks to leave plan mode, <span class="sym crs">✕</span> approves the plan and <span class="sym cir">○</span> rejects it. The session returns to the mode it had before the plan; the other choices are made on screen</li>
-      <li>the wait only happens while you are using the controller: it was pressed in the last 5 minutes, or it is what you touched last (no keyboard or mouse since). Otherwise the dialog on screen alone decides</li>
+      <li><span class="sym crs">✕</span> or R2 pulled through: <b>approve</b> (including approving a plan when leaving plan mode)</li>
+      <li><span class="sym cir">○</span> or L2 pulled through: <b>deny</b> and notify the agent</li>
+      <li><span class="sym tri">△</span> (or timeout / disconnected): leave it to the on-screen dialog</li>
+      <li><b>Screen and controller work together</b>: whichever you answer first wins, and focus automatically jumps to the session asking for approval.</li>
+      <li><b>Smart safeguards</b>: only waits while you are actively using the controller (pressed within 5 min or touched more recently than keyboard/mouse). Presses in the first 0.6 s after a prompt appears buzz twice and require a second press.</li>
     </ul>
-    <p class="tip"><span class="zh">屏幕上的对话框不会被拦下：它和手柄同时等着，谁先答算谁的。在屏幕上先答了，手柄会在那个工具跑完、或这一轮结束时放手。不想让手柄参与审批，在设置里把 <code>"hook_approval_timeout_s"</code> 设成 <code>0</code>。有会话在等批准时，焦点自动切过去，所以 ✕ 批准的一定是它。请求刚出现的 0.6 秒内按的不算数，手柄短震两下，再按一次。练习模式下不等手柄。</span><span class="en">The dialog on screen is not held back: both wait, and the first answer counts. If you answer on screen, the controller lets go once that tool has run or the turn is over. To keep the controller out of approvals, set <code>"hook_approval_timeout_s"</code> to <code>0</code>. When a session asks, the focus jumps to it, so ✕ always approves the one that is asking. A press in the first 0.6 seconds after a request appears does not count: the pad buzzes twice, press again. Practice mode does not wait for the controller.</span></p>
+    <p class="tip"><span class="zh">如果不想在非包装模式下用手柄审批，可在设置中将 <code>"hook_approval_timeout_s"</code> 设为 <code>0</code>。</span><span class="en">To disable hook approvals completely, set <code>"hook_approval_timeout_s"</code> to <code>0</code> in your config.</span></p>
   </section>
 
   <!-- ===================== 07 desktop ===================== -->
@@ -530,25 +547,19 @@ padpilot stop              <span class="c"># stop the daemon (it restarts when n
   <!-- ===================== 12 privacy ===================== -->
   <section class="ch pixbox" id="privacy">
     <h2><span class="no">12</span><span class="zh">它会运行、读取和发送什么</span><span class="en">What it runs, reads and sends</span></h2>
-    <p class="zh"><b>所有东西都在你自己的电脑上运行。</b>padpilot 没有服务器，不收集使用数据，会话里的内容不会离开这台电脑。</p>
-    <p class="en"><b>Everything runs on your own computer.</b> padpilot has no server and no telemetry, and nothing about your sessions leaves the machine.</p>
+    <p class="zh"><b>100% 本地运行：</b>没有远程服务器，不收集使用数据，会话内容绝不离开你的电脑。</p>
+    <p class="en"><b>100% local:</b> no server, no telemetry, and nothing from your sessions ever leaves your computer.</p>
     <ul class="zh">
-      <li><b>Hooks</b>：Claude Code 的事件发生时运行 <code>bin/padpilot hook claude</code>，通过本机 socket 告诉后台程序事件名、会话 id、工作目录和工具名。你发的消息只放在后台程序的内存里，给 R3 用，不写到磁盘。</li>
-      <li><b>后台程序</b>：通过 USB 或蓝牙打开手柄，4 小时没有活动自动退出。</li>
-      <li><b>唯一一次下载</b>：第一次用时创建 <code>~/.padpilot/venv</code>，从 PyPI 安装 <code>hidapi==0.15.0</code>。</li>
-      <li><b>读</b>：当前会话记录末尾的 token 用量（不读消息内容），你的快捷键设置，Claude app 的听写快捷键。只在内存里用。</li>
-      <li><b>写</b>：只写 <code>~/.padpilot/</code>。日志里只记按键名和状态，输入的文字只记字数。</li>
-      <li><b>按键</b>：只发给在最前面的 Claude 桌面 app。<b>麦克风</b>：只查有没有 app 在录音，从不录音。</li>
-      <li><b>网页</b>：手柄驾校和这本说明书在 <code>127.0.0.1:8737</code> 上提供，字体也是本机提供，不联网。</li>
+      <li><b>唯一一次联网</b>：首次执行 <code>setup</code> 时创建 <code>~/.padpilot/venv</code> 并从 PyPI 安装 <code>hidapi==0.15.0</code>。手柄驾校与本说明书均在本地 <code>127.0.0.1:8737</code> 提供（含内置开源字体），不加载任何外部网络资源。</li>
+      <li><b>进程与内存</b>：Hooks 通过本机 Unix Socket 通知后台进程（闲置 4 小时自动退出）。你上一条发送的消息仅保存在内存中供 R3 重发，<b>从不写入磁盘</b>。</li>
+      <li><b>本地读写</b>：仅读取会话记录末尾的 <b>Token 用量数字</b>（不读对话正文）以及你的快捷键配置；所有写入均在 <code>~/.padpilot/</code> 下（日志只记按键名与输入字数，不记文字内容）。</li>
+      <li><b>按键与麦克风</b>：按键仅定向发给最前台的 Claude 桌面 app 进程；麦克风灯仅通过 CoreAudio 查询“是否有应用正在录音”，<b>从不开启麦克风或录制音频</b>。</li>
     </ul>
     <ul class="en">
-      <li><b>Hooks</b>: on Claude Code's events, <code>bin/padpilot hook claude</code> tells the daemon, over a local socket, the event name, session id, working folder and tool name. Your prompt stays in the daemon's memory for R3 and is never written to disk.</li>
-      <li><b>The daemon</b> opens the controller over USB or Bluetooth and exits after 4 hours without activity.</li>
-      <li><b>One download</b>: the first time, it creates <code>~/.padpilot/venv</code> and installs <code>hidapi==0.15.0</code> from PyPI.</li>
-      <li><b>Reads</b>: the token count at the end of the current session's transcript (no message text), your keybindings, and the Claude app's dictation shortcut. Kept in memory only.</li>
-      <li><b>Writes</b> only in <code>~/.padpilot/</code>. The log holds button names and states; typed text is logged by its length only.</li>
-      <li><b>Keystrokes</b> go only to the Claude desktop app while it is in front. <b>Microphone</b>: it only asks whether some app is recording, and never records.</li>
-      <li><b>Pages</b>: Pad School and this manual are served on <code>127.0.0.1:8737</code>, fonts included; they load nothing from the internet.</li>
+      <li><b>One download</b>: first-time setup creates <code>~/.padpilot/venv</code> and installs <code>hidapi==0.15.0</code> from PyPI. Pad School and this manual are served locally on <code>127.0.0.1:8737</code> with bundled fonts and zero external requests.</li>
+      <li><b>Daemon &amp; memory</b>: hooks notify the daemon over a local Unix socket (exits after 4 hours idle). Your last prompt stays in RAM for R3 retry and is <b>never written to disk</b>.</li>
+      <li><b>Files read &amp; written</b>: reads only the <b>token count</b> at the end of the session transcript (never message text) plus your keybinding configs; writes only inside <code>~/.padpilot/</code> (logs record button names and text length only, never content).</li>
+      <li><b>Keystrokes &amp; microphone</b>: keystrokes go strictly to the frontmost Claude desktop app process; the mic LED only queries CoreAudio to check whether some app is recording and <b>never opens the mic or records audio</b>.</li>
     </ul>
   </section>
 
